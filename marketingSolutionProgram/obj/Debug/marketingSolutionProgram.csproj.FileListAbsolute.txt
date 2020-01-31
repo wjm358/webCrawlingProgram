@@ -1,0 +1,16 @@
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Debug\marketingSolutionProgram.exe.config
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Debug\marketingSolutionProgram.exe
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Debug\marketingSolutionProgram.pdb
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Debug\HtmlAgilityPack.dll
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Debug\HtmlAgilityPack.pdb
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Debug\HtmlAgilityPack.xml
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.csprojAssemblyReference.cache
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\Interop.SHDocVw.dll
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.csproj.ResolveComReference.cache
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.Form1.resources
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.Properties.Resources.resources
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.csproj.GenerateResource.cache
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.csproj.CoreCompileInputs.cache
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.csproj.CopyComplete
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.exe
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.pdb
