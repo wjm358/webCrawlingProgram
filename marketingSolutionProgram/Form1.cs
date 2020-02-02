@@ -31,6 +31,8 @@ namespace marketingSolutionProgram
         Random random;
         InternetExplorer ie;
         SHDocVw.WebBrowser webBrowser;
+        HtmlAgilityPack.HtmlDocument document;
+        HtmlNodeCollection nodes;
 
         private Random setRandomInstance()
         {
@@ -73,42 +75,35 @@ namespace marketingSolutionProgram
 
         }
 
-        //check in main document
-        public bool isInMainDocument(string keyword, bool isHref)
-        {
-            bool result = false;
-            
-            if(isHref)
-            {
-                //href 검색
-                
-            } else
-            {
-                //keyword 검색
-            }
-
-            return result;
-        }
-
         //check iframe length
-        public int countIframe()
+        public bool isPresentIframe()
         {
             int count = 0;
-            HtmlAgilityPack.HtmlDocument docu = null;
-            HtmlNodeCollection nodes = null; ;
+
             try
             {
-
-                docu = new HtmlWeb().Load("https://www.naver.com/");
-                Thread.Sleep(3000); //로딩 될 떄까지 기다려야 함.
-                nodes = docu.DocumentNode.SelectNodes("//iframe[@src]");
+                document = new HtmlWeb().Load(webBrowser.LocationURL);
+                nodes = document.DocumentNode.SelectNodes("//iframe[@src]");
                 count = nodes.Count;
             }
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
             }
+
+            return count > 0;
+        }
+
+        //iframe 갯수 
+        public int getIframeCount()
+        {
+            int count = 0;
+            document = new HtmlWeb().Load(webBrowser.LocationURL);
+            nodes = document.DocumentNode.SelectNodes("//iframe[@src]");
+            count = nodes.Count;
+
             return count;
+
         }
 
         public bool compareInIframe()
@@ -122,6 +117,7 @@ namespace marketingSolutionProgram
             int count = 0;
             return count;
         }
+
         public void findByKeyword(string keyword)
         {
             // declaring & loading dom
@@ -130,59 +126,75 @@ namespace marketingSolutionProgram
             doc = web.Load(webBrowser.LocationURL);
             var ress = doc.DocumentNode.SelectSingleNode("//*[text()[contains(., '" + keyword + "' )]]");
             string tagName = ress.Name;
-
+            if(tagName == null)
+            {
+                //mindocument에 없는 것임
+                var ress2 = doc.DocumentNode.SelectNodes("//iframe[@src]");
+                Console.WriteLine(ress2[0].OuterHtml);
+            }
+            else
+            {
+                //maindocument에 존재
+            }
             IHTMLElementCollection elements = ie.Document.getElementsByTagName(tagName);
-            Console.WriteLine("findByKeyword length : " + elements.length);
 
+            //main document에서 조사
             foreach (IHTMLElement temp in elements)
             {
                 if (temp.innerText != null && temp.innerText.CompareTo(ress.InnerText) == 0)
                 {
                     temp.click();
-                    break;
+
+                    return;
                 }
             }
-        }
 
-        public void checkHrefString(string keyword)
-        {
-            //href="https://post.naver.com/viewer/postView.nhn?volumeNo=27373987&memberNo=17369166"
-            if (keyword.StartsWith("href"))
+            if (isPresentIframe() == true)
             {
+                int iframeCount = getIframeCount();
 
+                for (int i = 0; i < iframeCount; i++)
+                {
+
+                    mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
+                    object index = i;
+                    mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc1.frames.item(ref index);
+                    doc1 = (mshtml.HTMLDocument)frame.document;
+                    Console.WriteLine(doc1.documentElement.innerHTML);
+
+                    IHTMLElementCollection iframeElements = doc1.getElementsByTagName(tagName);
+                    foreach (IHTMLElement temp in iframeElements)
+                    {
+                        if (temp.innerText != null && temp.innerText.CompareTo(ress.InnerText) == 0)
+                        {
+                            temp.click();
+
+                            return;
+                        }
+                    }
+                    //for문 종료
+                }
+                //if 문 내부 종료
             }
-        }
 
-        //체크 메소드를 따로 빼서 try해주자. getAttribute부분
+        }
 
         public void findByHref(string keyword)
         {
-            Console.WriteLine("findByHref start");
             mshtml.HTMLDocument doc = ie.Document;
             var elements = doc.getElementsByTagName("a");
-            //href = "https://news.naver.com/"
+            keyword = makeToHrefString(ref keyword);
+            string hrefString = string.Empty;
 
             foreach (IHTMLElement temp in elements)
             {
-                string hrefString = string.Empty;
-                try
-                {
+                hrefString = temp.getAttribute("href");
 
-                    //hrefString = temp.getAttribute("href");
-                    hrefString = temp.innerText;
-                }
-                catch
-                {
-                    Console.WriteLine("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-                }
-                if (hrefString != null)
-                {
-                    Console.WriteLine(hrefString);
-                }
                 if (hrefString != null && hrefString.CompareTo(keyword) == 0)
                 {
                     Console.WriteLine("findByHref good");
-                    //temp.click();
+                    temp.click();
+                    break;
                 }
             }
 
@@ -199,30 +211,136 @@ namespace marketingSolutionProgram
             //}
 
         }
-        public void clickRandomly()
+
+        //check in main document
+        public bool isInMainDocument(string keyword, bool isHref)
+        {
+            bool result = false;
+
+            if (isHref)
+            {
+                //href 검색
+                findByHref(keyword);
+
+            }
+            else
+            {
+                //keyword 검색
+                findByKeyword(keyword);
+            }
+
+            return result;
+        }
+
+        public bool isInIframe(string keyword)
+        {
+            bool result = false;
+
+
+            return result;
+        }
+        //href format 체크 후 convert
+        public string makeToHrefString(ref string keyword)
         {
 
+            //href="https://post.naver.com/viewer/postView.nhn?volumeNo=27373987&memberNo=17369166"
+            if (keyword.StartsWith("href"))
+            {
+                keyword = keyword.Substring(keyword.IndexOf("="));
+            }
+            return keyword;
+
+        }
+
+        //체크 메소드를 따로 빼서 try해주자. getAttribute부분
+
+
+        public int getRandomIndex(int elementsLength)
+        {
+            random = setRandomInstance();
+            int randomIndex = random.Next(0, elementsLength);
+            return randomIndex;
+        }
+
+
+        public void elementClick(int randomIndex, IHTMLElementCollection elements)
+        {
+            int count = 0;
+            foreach (IHTMLElement element in elements)
+            {
+                if (count == randomIndex)
+                {
+                    element.click();
+                    break;
+                }
+                count++;
+            }
+        }
+
+        public void clickRandomly()
+        {
+            if (isPresentIframe() == false)
+            {
+                //main document 에서 실행
+                mshtml.HTMLDocument doc = ie.Document;
+                var elements = doc.getElementsByTagName("a");
+                int randomIndex = getRandomIndex(elements.length);
+                elementClick(randomIndex, elements);
+
+            }
+            else
+            {
+
+            }
         }
         private void button1_Click(object sender, EventArgs e)
         {
             ie = new InternetExplorer();
-
             webBrowser = (SHDocVw.WebBrowser)ie;
 
             string url = @"http://www.naver.com";
             webBrowser.Visible = true;
-            webBrowser.Navigate(url);
-            Thread.Sleep(5000);
-            Console.WriteLine(webBrowser.LocationURL);
+            //webBrowser.Navigate(url);
+
+            // https://blog.naver.com/kims_pr/221780431616
+            ie.Navigate(url);
+            ie.Wait();
+
+            // 위 url의 iframe src를 출력한다.
+
+            findByKeyword("G마켓");
 
             HtmlAgilityPack.HtmlDocument docu = null;
             HtmlNodeCollection nodes = null; ;
             try
             {
 
-                docu = new HtmlWeb().Load("https://www.naver.com/");
+                docu = new HtmlWeb().Load("https://blog.naver.com/kims_pr/221780431616");
+
+                //add microsoft mshtml object library reference 
+                mshtml.HTMLDocument doc = (mshtml.HTMLDocument)webBrowser.Document;
+                object index = 0;
+                mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc.frames.item(ref index);
+                doc = (mshtml.HTMLDocument)frame.document;
+                Console.WriteLine(doc.documentElement.innerHTML);
+
+                var elements = doc.getElementsByTagName("a");
+                int elementsLength = elements.length;
+                random = setRandomInstance();
+                int randomIndex = random.Next(0, elementsLength);
+
+                int i = 0;
+                foreach (IHTMLElement element in elements)
+                {
+                    string href = element.getAttribute("href");
+                    if (href != null && i == randomIndex) { Console.WriteLine("click"); element.click(); break; }
+                    i++;
+
+                }
+
                 Thread.Sleep(3000); //로딩 될 떄까지 기다려야 함.
-                nodes = docu.DocumentNode.SelectNodes("//iframe[@src]");
+
+                //  nodes = docu.DocumentNode.SelectNodes("//iframe[@src]");
 
             }
             catch (Exception ex)
@@ -231,26 +349,20 @@ namespace marketingSolutionProgram
             }
 
 
-            foreach (var node in nodes)
-            {
-                try
-                {
-                    HtmlAttribute attr = node.Attributes["src"];
-                    Console.WriteLine(attr.Value);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex);
-                }
+            //foreach (var node in nodes)
+            //{
+            //    try
+            //    {
+            //        HtmlAttribute attr = node.Attributes["src"];
+            //        Console.WriteLine(attr.Value);
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        Console.WriteLine(ex);
+            //    }
 
-            }
-            
-            Stopwatch sw = new Stopwatch();
-            sw.Start();
-            mshtml.HTMLDocument doc = ie.Document;
-            var elements = doc.getElementsByTagName("img");
-            sw.Stop();
-            Console.WriteLine("img tag 갯수 == " + elements.length + "    " + sw.ElapsedMilliseconds);
+            //}
+
             //foreach(IHTMLElement temp in elements)
             //{
             //    if(temp !=null )
@@ -258,15 +370,7 @@ namespace marketingSolutionProgram
             //        Console.WriteLine(temp.outerHTML);
             //    }
             //}
-            Random random = new Random(Guid.NewGuid().GetHashCode());
-            int randomLength = random.Next(0, elements.length);
-            int cnt = 0;
-            Thread.Sleep(2000);
-            //네이버페이
             //webBrowser2.Document.Body.InnerText
-            string href = "https://news.naver.com/";
-
-            findByKeyword("G마켓");
             // var doc2 = new HtmlAgilityPack.HtmlDocument();
             HtmlAgilityPack.HtmlDocument doc2 = new HtmlWeb().Load("http://www.naver.com/");
             //  doc2.Load(url);
@@ -274,7 +378,6 @@ namespace marketingSolutionProgram
             //var ress = doc2.DocumentNode.SelectSingleNode("//*[text()[contains(., '네이버페이')]]");
             // Console.WriteLine(ress.Name);
             //var val = ress.Attributes["href"].Value; //
-            Thread.Sleep(2000);
             // Console.WriteLine(ress.OuterHtml);
             //< span class="an_txt">네이버페이</span>
             //foreach (IHTMLElement temp in elements)
@@ -341,6 +444,23 @@ namespace marketingSolutionProgram
 
             }
             macroListTextbox.Text += macroString + "\r\n";
+        }
+
+
+
+    }
+
+
+    // 페이지 로딩 완료까지 대기하는 확장 메서드
+    public static class SHDovVwEx
+    {
+        public static void Wait(this SHDocVw.InternetExplorer ie, int millisecond = 0)
+        {
+            while (ie.Busy == true || ie.ReadyState != SHDocVw.tagREADYSTATE.READYSTATE_COMPLETE)
+            {
+                System.Threading.Thread.Sleep(100);
+            }
+            System.Threading.Thread.Sleep(millisecond);
         }
     }
 }
