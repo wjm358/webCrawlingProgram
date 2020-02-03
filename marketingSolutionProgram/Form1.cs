@@ -125,6 +125,7 @@ namespace marketingSolutionProgram
             HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
             doc = web.Load(webBrowser.LocationURL);
             var ress = doc.DocumentNode.SelectSingleNode("//*[text()[contains(., '" + keyword + "' )]]");
+
             string tagName = ress.Name;
             if(tagName == null)
             {
@@ -306,8 +307,41 @@ namespace marketingSolutionProgram
             ie.Navigate(url);
             ie.Wait();
 
-            // 위 url의 iframe src를 출력한다.
+            HtmlWeb web = new HtmlWeb();
+            HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
+            doc = web.Load(webBrowser.LocationURL);
+            var ress = doc.DocumentNode.SelectSingleNode("//*[text()[contains(., 'G마켓' )]]");
+            string tagName = String.Empty;
+            if (ress != null) tagName = ress.Name;
+            Console.WriteLine(tagName);
+            if (tagName == String.Empty)
+            {
+                Console.WriteLine("aa");
+                //mindocument에 없는 것임
+                var ress2 = doc.DocumentNode.SelectNodes("//iframe[@src]");
+                Console.WriteLine(ress2[3].OuterHtml);
 
+                int iframeCount = getIframeCount();
+                for (int i = 0; i < iframeCount; i++)
+                {
+                    Console.WriteLine(ress2[i].OuterHtml);
+                    Console.WriteLine();
+                    Console.WriteLine();
+                    Console.WriteLine();
+                    Console.WriteLine();
+                    Console.WriteLine();
+                    Console.WriteLine();
+
+                    //for문 종료
+                }
+            }
+
+
+
+
+
+            // 위 url의 iframe src를 출력한다.
+            /*
             findByKeyword("G마켓");
 
             HtmlAgilityPack.HtmlDocument docu = null;
@@ -348,7 +382,7 @@ namespace marketingSolutionProgram
                 Console.WriteLine(ex);
             }
 
-
+    */
             //foreach (var node in nodes)
             //{
             //    try
@@ -446,7 +480,85 @@ namespace marketingSolutionProgram
             macroListTextbox.Text += macroString + "\r\n";
         }
 
+        #region 검색어 입력
+        private void searchBarStart(string search)
+        {
+            //mobile버전 / pc버전
+            string prefixUrl = string.Empty;
+            //수정해야함
+            Console.WriteLine("prefixUrl : " + prefixUrl);
+            string[] splitUrl = prefixUrl.Split(new char[] { '.' });
+            if (splitUrl[0].StartsWith("m"))
+            {
+                //모바일 버전
+                string website = splitUrl[1];
+                if (website.StartsWith("naver"))
+                {
+                    mobileNaverSearchbarStart(search);
+                }
+                else
+                {
+                    mobileDaumSearchbarStart(search);
+                }
+            }
+            else
+            {
+                //pc버전
+                string website = splitUrl[1];
+                if (website.StartsWith("naver"))
+                {
+                    pcNaverSearchbarStart(search);
+                }
+                else
+                {
+                    pcDaumSearchbarStart(search);
+                }
+            }
+        }
 
+        private void pcNaverSearchbarStart(string search)
+        {
+            //find search_bar
+            System.Windows.Forms.HtmlDocument doc = webBrowser.Document;
+         //   mshtml.HTMLDocument doc = webBrowser.Document;
+            var searchBar = doc.getElementById("query");
+            searchBar.setAttribute("value", search);
+
+            var searchButton = doc.getElementById("search_btn");
+            searchButton.in
+            searchButton.click();
+
+        }
+        private void mobileNaverSearchbarStart(string search)
+        {
+            mshtml.HTMLDocument doc = ie.Document;
+            var searchBar = doc.getElementById("MM_SEARCH_FAKE");
+            searchBar.setAttribute("value", search);
+            
+            searchBar.click
+            //enter 입력해야함  
+        }
+        private void pcDaumSearchbarStart(string search)
+        {
+            mshtml.HTMLDocument doc = ie.Document;
+            var searchBar = doc.getElementById("q");
+            searchBar.setAttribute("value", search);
+
+            var searchButton = doc.
+            var search_button = driver.FindElement(By.XPath(" //*[@id='daumSearch']/fieldset/div/div/button[2]"));
+            search_button.Click();
+
+        }
+        private void mobileDaumSearchbarStart(string search)
+        {
+            var search_bar = driver.FindElement(By.Id("q"));
+            search_bar.Clear();
+            search_bar.SendKeys(search);
+            var search_button = driver.FindElement(By.XPath("//*[@id='form_totalsearch']/fieldset/div/div/button[3]"));
+            search_button.Click();
+        }
+
+        #endregion
 
     }
 
