@@ -125,8 +125,8 @@ namespace marketingSolutionProgram
             HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
             doc = web.Load(webBrowser.LocationURL);
             var ress = doc.DocumentNode.SelectSingleNode("//*[text()[contains(., '" + keyword + "' )]]");
+            string tagName = null;
 
-            string tagName = ress.Name;
             if(tagName == null)
             {
                 //mindocument에 없는 것임
@@ -136,6 +136,7 @@ namespace marketingSolutionProgram
             else
             {
                 //maindocument에 존재
+
             }
             IHTMLElementCollection elements = ie.Document.getElementsByTagName(tagName);
 
@@ -306,6 +307,12 @@ namespace marketingSolutionProgram
             // https://blog.naver.com/kims_pr/221780431616
             ie.Navigate(url);
             ie.Wait();
+             
+            mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
+            object index = 3;
+            mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc1.frames.item(ref index);
+            doc1 = (mshtml.HTMLDocument)frame.document;
+            Console.WriteLine(doc1.body.innerHTML);
 
             HtmlWeb web = new HtmlWeb();
             HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
@@ -314,28 +321,7 @@ namespace marketingSolutionProgram
             string tagName = String.Empty;
             if (ress != null) tagName = ress.Name;
             Console.WriteLine(tagName);
-            if (tagName == String.Empty)
-            {
-                Console.WriteLine("aa");
-                //mindocument에 없는 것임
-                var ress2 = doc.DocumentNode.SelectNodes("//iframe[@src]");
-                Console.WriteLine(ress2[3].OuterHtml);
-
-                int iframeCount = getIframeCount();
-                for (int i = 0; i < iframeCount; i++)
-                {
-                    Console.WriteLine(ress2[i].OuterHtml);
-                    Console.WriteLine();
-                    Console.WriteLine();
-                    Console.WriteLine();
-                    Console.WriteLine();
-                    Console.WriteLine();
-                    Console.WriteLine();
-
-                    //for문 종료
-                }
-            }
-
+       
 
 
 
@@ -521,22 +507,22 @@ namespace marketingSolutionProgram
             //find search_bar
             System.Windows.Forms.HtmlDocument doc = webBrowser.Document;
          //   mshtml.HTMLDocument doc = webBrowser.Document;
-            var searchBar = doc.getElementById("query");
-            searchBar.setAttribute("value", search);
+            var searchBar = doc.GetElementById("query");
+            searchBar.SetAttribute("value", search);
 
-            var searchButton = doc.getElementById("search_btn");
-            searchButton.in
-            searchButton.click();
+            var searchButton = doc.GetElementById("search_btn");
+            searchButton.InvokeMember("submit");
+            //searchButton.click();
 
         }
         private void mobileNaverSearchbarStart(string search)
         {
-            mshtml.HTMLDocument doc = ie.Document;
-            var searchBar = doc.getElementById("MM_SEARCH_FAKE");
-            searchBar.setAttribute("value", search);
-            
-            searchBar.click
-            //enter 입력해야함  
+            System.Windows.Forms.HtmlDocument doc = webBrowser.Document;
+            //   mshtml.HTMLDocument doc = webBrowser.Document;
+            var searchBar = doc.GetElementById("MM_SEARCH_FAKE");
+            searchBar.SetAttribute("value", search);
+            searchBar.InvokeMember("submit");
+          
         }
         private void pcDaumSearchbarStart(string search)
         {
@@ -544,22 +530,51 @@ namespace marketingSolutionProgram
             var searchBar = doc.getElementById("q");
             searchBar.setAttribute("value", search);
 
-            var searchButton = doc.
-            var search_button = driver.FindElement(By.XPath(" //*[@id='daumSearch']/fieldset/div/div/button[2]"));
-            search_button.Click();
+            HtmlAgilityPack.HtmlDocument doc2 = new HtmlWeb().Load(webBrowser.LocationURL);
+            var searchButton = doc2.DocumentNode.SelectSingleNode("//*[@id='daumSearch']/fieldset/div/div/button[2]");
+
+            var buttons = doc.getElementsByTagName("button");
+            foreach(IHTMLElement button in buttons )
+            {
+                if(searchButton.Attributes["class"].Value.CompareTo(button.className) == 0)
+                {
+                    Console.WriteLine("class correct");
+                    button.click();
+                    return;
+                }
+            }
+            
 
         }
         private void mobileDaumSearchbarStart(string search)
         {
-            var search_bar = driver.FindElement(By.Id("q"));
-            search_bar.Clear();
-            search_bar.SendKeys(search);
-            var search_button = driver.FindElement(By.XPath("//*[@id='form_totalsearch']/fieldset/div/div/button[3]"));
-            search_button.Click();
-        }
+            mshtml.HTMLDocument doc = ie.Document;
+            var searchBar = doc.getElementById("q");
+            searchBar.setAttribute("value", search);
 
+            //*[@id='form_totalsearch']/fieldset/div/div/button[3]
+            HtmlAgilityPack.HtmlDocument doc2 = new HtmlWeb().Load(webBrowser.LocationURL);
+            var searchButton = doc2.DocumentNode.SelectSingleNode("//*[@id='daumSearch']/fieldset/div/div/button[2]");
+
+            var buttons = doc.getElementsByTagName("button");
+            foreach (IHTMLElement button in buttons)
+            {
+                if (searchButton.Attributes["class"].Value.CompareTo(button.className) == 0)
+                {
+                    Console.WriteLine("class correct");
+                    button.click();
+                    return;
+                }
+            }
+
+        }
+        
         #endregion
 
+        private void processStart()
+        {
+
+        }
     }
 
 
