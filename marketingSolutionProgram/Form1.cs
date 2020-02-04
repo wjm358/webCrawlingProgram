@@ -14,6 +14,10 @@ using System.Windows.Forms;
 using HtmlAgilityPack;
 using System.Runtime.InteropServices;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using log4net;
+using System.Text.RegularExpressions;
 
 namespace marketingSolutionProgram
 {
@@ -27,19 +31,46 @@ namespace marketingSolutionProgram
         private const int MOUSEEVENTF_LEFTUP = 0x04;
         private const int MOUSEEVENTF_RIGHTDOWN = 0x08;
         private const int MOUSEEVENTF_RIGHTUP = 0x10;
+
+        int indexNum = 0;
+        int macroListTextboxCursor = 0;
+
+        string indexString = String.Empty;
+        string checkString = String.Empty;
         string macroString = String.Empty;
-        Random random;
+        string macroList = String.Empty;
+
+        private Stopwatch totalsw = null;
+        private ILog log = LogManager.GetLogger("Program");
+        System.Timers.Timer mouseDetectTimer = null; //좌표 감지에 쓰이는 타이머
+        Random random = null;
+
         InternetExplorer ie;
         SHDocVw.WebBrowser webBrowser;
         HtmlAgilityPack.HtmlDocument document;
         HtmlNodeCollection nodes;
 
+        #region 변수 재활용
+        private Stopwatch setTotalSw()
+        {
+            if (totalsw == null)
+                totalsw = new Stopwatch();
+            totalsw.Reset();
+            return totalsw;
+        }
         private Random setRandomInstance()
         {
             if (random == null)
                 random = new Random(Guid.NewGuid().GetHashCode());
             return random;
         }
+        private System.Timers.Timer setTimer()
+        {
+            if (mouseDetectTimer == null)
+                mouseDetectTimer = new System.Timers.Timer();
+            return mouseDetectTimer;
+        }
+        #endregion
 
         private void sleep(int s, int e)
         {
@@ -49,6 +80,7 @@ namespace marketingSolutionProgram
             return;
         }
 
+        #region 마우스 클릭 이벤트
         public void LeftDoubleClick(string xpos, string ypos)
         {
             Console.WriteLine("xpos :" + xpos + "  ypos: " + ypos);
@@ -68,6 +100,7 @@ namespace marketingSolutionProgram
             mouse_event(MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
 
         }
+        #endregion
 
         public Form1()
         {
@@ -127,7 +160,7 @@ namespace marketingSolutionProgram
             var ress = doc.DocumentNode.SelectSingleNode("//*[text()[contains(., '" + keyword + "' )]]");
             string tagName = null;
 
-            if(tagName == null)
+            if (tagName == null)
             {
                 //mindocument에 없는 것임
                 var ress2 = doc.DocumentNode.SelectNodes("//iframe[@src]");
@@ -300,29 +333,51 @@ namespace marketingSolutionProgram
             ie = new InternetExplorer();
             webBrowser = (SHDocVw.WebBrowser)ie;
 
-            string url = @"http://www.naver.com";
+            //string url = @"http://www.naver.com";
             webBrowser.Visible = true;
             //webBrowser.Navigate(url);
 
             // https://blog.naver.com/kims_pr/221780431616
+            string url = @"https://m.naver.com";
+            string keyword = "지도 더보기";
             ie.Navigate(url);
             ie.Wait();
-             
-            mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
-            object index = 3;
-            mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc1.frames.item(ref index);
-            doc1 = (mshtml.HTMLDocument)frame.document;
-            Console.WriteLine(doc1.body.innerHTML);
+            mobileNaverSearchbarStart(keyword);
 
-            HtmlWeb web = new HtmlWeb();
-            HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
-            doc = web.Load(webBrowser.LocationURL);
-            var ress = doc.DocumentNode.SelectSingleNode("//*[text()[contains(., 'G마켓' )]]");
-            string tagName = String.Empty;
-            if (ress != null) tagName = ress.Name;
-            Console.WriteLine(tagName);
-       
 
+            //mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
+            //object index = 3;
+            //mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc1.frames.item(ref index);
+            //doc1 = (mshtml.HTMLDocument)frame.document;
+            //Console.WriteLine(doc1.documentElement.outerHTML);
+
+            //var htmlDoc = new HtmlAgilityPack.HtmlDocument();
+            //htmlDoc.LoadHtml(doc1.documentElement.outerHTML);
+
+            //var ress = htmlDoc.DocumentNode.SelectSingleNode("//*[text()[contains(., 'G마켓' )]]");
+            //string tagName = null;
+
+            //if (ress != null) tagName = ress.Name;
+            //Console.WriteLine(tagName + "이거 맞아? ");
+            //if (tagName == null) Console.WriteLine("tagName is null");
+            //else { Console.WriteLine(ress.GetAttributeValue("href", "")); }
+
+            //var elements = doc1.getElementsByTagName("a");
+            //foreach(IHTMLElement element in elements)
+            //{
+            //    string href = element.innerText;
+            //    if (href != null) Console.WriteLine("href : " + href);
+            //    if (href != null && href.CompareTo(ress.InnerText) == 0)
+            //    {
+
+            //        element.click();
+            //        break;
+            //    }
+            //}
+
+            //   HtmlWeb web = new HtmlWeb();
+            //  HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
+            // doc = web.Load(doc1.documentElement.outerHTML); //error
 
 
 
@@ -430,6 +485,109 @@ namespace marketingSolutionProgram
                 }
         }
 
+        #region ui변경 methods
+        private void searchMethodSelectCombobox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (searchMethodSelectCombobox.SelectedIndex == 0)
+            {
+                inputKeywordLabel.Text = "키워드입력: ";
+                inputKeywordLabel.Visible = true;
+                inputKeywordTextBox.Visible = true;
+            }
+            else if (searchMethodSelectCombobox.SelectedIndex == 1)
+            {
+                inputKeywordLabel.Text = "href태그입력: ";
+                inputKeywordLabel.Visible = true;
+                inputKeywordTextBox.Visible = true;
+            }
+        }
+
+        //vmware같은곳에서는 사용할 수 없음. ip address 얻어옴.
+        private IPAddress LocalIPAddress()
+        {
+            if (!System.Net.NetworkInformation.NetworkInterface.GetIsNetworkAvailable())
+            {
+                return null;
+            }
+            IPHostEntry host = Dns.GetHostEntry(Dns.GetHostName());
+            return host
+                .AddressList
+                .FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork);
+        }
+
+
+        //보고서 textbox에 쓸 함수 구현, runworkerCompleted에서 사용됨
+        private StringBuilder endAllMacro(ref Stopwatch sw)
+        {
+            StringBuilder successString = new StringBuilder();
+            /*
+             * 현재 IP : ipv4 string
+             * 작업한 시간: HH:MM:SS.mmmm
+             * 작업 완료 시간: 2019/12/12 12:24:19 AM/PM, macroString
+             * 작업완료.
+             */
+            successString.AppendLine("현재 IP: " + LocalIPAddress());
+            successString.AppendLine("작업한 시간: " + sw.Elapsed);
+            string cntTime = System.DateTime.Now.ToString("yyyy/MM/dd hh:mm:ss tt, ");
+            successString.AppendLine("작업 완료 시간: " + cntTime);
+            successString.AppendLine("작업 완료");
+            return successString;
+        }
+
+        //현재 매크로가 시작
+        private void printCurrentMacro(string macroString)
+        {
+            if (currentMacroLabel.InvokeRequired)
+            {
+                currentMacroLabel.BeginInvoke(new Action(() => { currentMacroLabel.Text = "현재 진행 명령 : " + macroString; }));
+                return;
+            }
+        }
+
+        //현재 매크로 완료
+        private void endCurrentMacro(string macroString)
+        {
+            if (reportTextBox.InvokeRequired)
+            {
+                reportTextBox.BeginInvoke(new Action(() =>
+                {
+                    reportTextBox.Text += "작업완료 : " + macroString.Substring(macroString.IndexOf(".") + 1);
+
+                    reportTextBox.SelectionStart = reportTextBox.TextLength;
+                    reportTextBox.ScrollToCaret();
+
+                    int pos = macroListTextBox.GetFirstCharIndexFromLine(macroListTextboxCursor);
+
+                    if (pos > -1)
+                    {
+                        macroListTextBox.Select(pos, 0);
+                        macroListTextBox.ScrollToCaret();
+                    }
+                    macroListTextboxCursor++;
+
+                }));
+                return;
+            }
+        }
+
+        //무한 반복문에서 경계문으로 사용
+        private void splitInfiniteLoop()
+        {
+            if (reportTextBox.InvokeRequired)
+            {
+                reportTextBox.BeginInvoke(new Action(() =>
+                {
+                    reportTextBox.Text += "-------------------------------------------"
++ Environment.NewLine;
+                    reportTextBox.SelectionStart = reportTextBox.TextLength;
+                    reportTextBox.ScrollToCaret();
+                }));
+            }
+        }
+
+
+        #endregion
+
         private void addMacroButton_Click(object sender, EventArgs e)
         {
             string macroString = String.Empty;
@@ -449,22 +607,258 @@ namespace marketingSolutionProgram
                     break;
                 case 3:
                     //검색어
+                    if (searchTextBox.Text == "")
+                    {
+                        MessageBox.Show("검색어를 입력하세요.");
+                    }
+                    else
+                        macroString = "▶" + selectedIndex + ".검색어입력=" + searchTextBox.Text;
                     break;
                 case 4:
                     //게시글 or 버튼 클릭
+                    if (searchMethodSelectCombobox.SelectedIndex == 0)
+                    {
+                        macroString = "▶" + selectedIndex + ".키워드검색=" + inputKeywordTextBox.Text;
+                    }
+                    else
+                    {
+                        macroString = "▶" + selectedIndex + ".href검색=" + inputKeywordTextBox.Text;
+                    }
                     break;
                 case 5:
                     //랜덤검색
                     macroString = "▶" + selectedIndex + ".랜덤태그검색=";
-
                     break;
                 case 6:
                     //체류시간 설정
+                    if (sleepStartTextBox.Text == "" || sleepEndTextBox.Text == "")
+                    {
+                        MessageBox.Show("체류 시간을 입력하세요.");
+                    }
+                    else
+                    {
+                        macroString = "▶" + selectedIndex + ".체류시간추가=" + sleepStartTextBox.Text + "~" + sleepEndTextBox.Text;
+                    }
+                    break;
+                case 7:
+                    //마우스 이벤트
+                    if (mouseEventComboBox.SelectedItem == null)
+                    {
+                        MessageBox.Show("이벤트를 선택해주세요.");
+                    }
+                    else
+                    {
+                        //마우스이벤트=왼쪽/오른쪽 클릭:(100,300)
+                        if (xAbsLocTextBox.Text.Length == 0 || yAbsLocTextBox.Text.Length == 0)
+                        {
+                            MessageBox.Show("X좌표와 Y좌표를 입력해주세요.");
+                        }
+                        else
+                        {
+                            macroString = "▶" + selectedIndex + ".마우스이벤트=" + mouseEventComboBox.Text + ":(" +
+                                xAbsLocTextBox.Text + "," + yAbsLocTextBox.Text + ")";
+                        }
+                    }
                     break;
 
+
             }
-            macroListTextbox.Text += macroString + "\r\n";
+            macroListTextBox.Text += macroString + "\r\n";
         }
+
+        bool checkRegex(string checkString, string pattern)
+        {
+            return Regex.IsMatch(checkString, pattern);
+        }
+
+        void bw_DoWork(List<string> splitMacroList, int macroListLength, DoWorkEventArgs e)
+        {
+            while (true)
+            {
+                totalsw = setTotalSw();
+                totalsw.Start();
+
+                log.Debug("\n\n\n매크로 작업목록 출력");
+                foreach (string temp in splitMacroList)
+                {
+                    log.Debug(temp);
+                }
+                log.Debug("----------------------------------------------------\n\n");
+
+                for (int i = 0; i < macroListLength; i++)
+                {
+                    //취소버튼 클릭시
+                    if (worker.CancellationPending)
+                    {
+                        e.Cancel = true;
+                        totalsw.Stop();
+                        return;
+                    }
+
+
+                    macroString = splitMacroList[i].Trim().Substring(1); //특수문자 제거
+                    printCurrentMacro(macroString); //현재 명령을 라벨에 출력
+
+                    indexNum = macroString[0] - '0';
+                    indexString = macroString.Substring(macroString.IndexOf(".") + 1, macroString.IndexOf("=") - (macroString.IndexOf(".") + 1));
+
+                    string pattern = @"^" + indexNum.ToString() + @"." + Regex.Escape(indexString) + @"$";
+                    checkString = macroString.Substring(0, macroString.IndexOf("=")); //0.이동
+
+                    //dot pattern 때문에 고생함
+                    if (checkRegex(checkString, pattern))
+                    {
+                        log.Debug("현재 반복문 넘버 : " + i + " , 작업 이름: " + macroString);
+
+                        switch (indexNum)
+                        {
+                            case 0:
+                               
+                               
+                                break;
+                            case 1:
+                            
+
+                                break;
+                            case 2:
+                                
+                                break;
+                            case 3:
+                                //체류시간추가=30~50
+
+                                string st = macroString.Substring(macroString.IndexOf("=") + 1, macroString.IndexOf("~") - (macroString.IndexOf("=") + 1));
+
+                                int start_time = Int32.Parse(st);
+
+                                string et = macroString.Substring(macroString.IndexOf("~") + 1, (macroString.Length - 1) - macroString.IndexOf("~"));
+                                int end_time = Int32.Parse(et);
+
+                                sleep(start_time, end_time);
+                                break;
+                            case 4:
+
+                                
+
+                                break;
+                            case 5:
+                             
+                                break;
+                            case 6:
+
+                                ////검색어 입력
+                                string search = macroString.Substring(macroString.IndexOf("=") + 1);
+                                searchBarStart(search);
+
+                                break;
+                            case 7:
+                                //마우스 이벤트 추가
+                                //form2가 등장해야함
+                                //마우스이벤트=왼쪽버튼 (더블)클릭:(100,300)
+                                string leftOrRight = macroString.Substring(macroString.IndexOf("=") + 1, macroString.IndexOf(" ") - (macroString.IndexOf("=") + 1));
+
+                                string clickOrDoubleClick = macroString.Substring(macroString.IndexOf(" ") + 1, macroString.IndexOf(":") - (macroString.IndexOf(" ") + 1));
+
+                                string xpos = macroString.Substring(macroString.IndexOf("(") + 1, macroString.IndexOf(",") - (macroString.IndexOf("(") + 1));
+                                string ypos = macroString.Substring(macroString.IndexOf(",") + 1, macroString.IndexOf(")") - (macroString.IndexOf(",") + 1));
+
+                                if (clickOrDoubleClick.StartsWith("더블"))
+                                {
+                                    LeftDoubleClick(xpos, ypos);
+                                }
+                                else
+                                {
+                                    LeftOneClick(xpos, ypos);
+                                }
+                                break;
+                            case 8:
+                                
+
+                                break;
+                         
+                            default:
+                                Console.WriteLine("매크로형식이 맞지 않음");
+                                break;
+                        }
+
+                                                //switch문 종료
+                    }
+                    else
+                    {
+                        //regex가 맞지 않을때
+                        //작업명령 format이 이상함.
+                        continue;
+                    }
+
+
+                }
+                splitInfiniteLoop(); // while문 반복마다 한번씩 실행됨 
+
+                totalsw.Stop();
+
+            }
+        }
+
+        void bw_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        {
+            progressBar1.MarqueeAnimationSpeed = 0;
+            progressBar1.Style = ProgressBarStyle.Blocks;
+            progressBar1.Value = progressBar1.Minimum;
+
+            reportTextBox.Text += endAllMacro(ref totalsw);
+
+            reportTextBox.SelectionStart = reportTextBox.TextLength;
+            reportTextBox.ScrollToCaret();
+
+            currentMacroLabel.Text = "현재 진행 명령 : 작업이 중단되었습니다.";
+
+            processStartButton.Enabled = true;
+            //if (e.Cancelled)
+            //{
+            //    reportTextbox.Text += "작업을 중단했습니다." + Environment.NewLine;
+            //    worker = null;
+            //    if(driver != null) {
+            //        driver.Quit();
+            //    driver = null;
+            //    }
+            //}
+            if (e.Error != null)
+            {
+                reportTextBox.Text += "에러가 발생해서 작업이 중단되었습니다." + Environment.NewLine;
+            }
+            reportTextBox.Text += "작업을 중단했습니다." + Environment.NewLine;
+            worker = null;
+            //예외처리 필요?
+
+
+        }
+
+        #region 마우스 이벤트
+        //실시간 좌표 감지 시작
+        private void mouseDetectStart(object sender, EventArgs e)
+        {
+            mouseDetectTimer = setTimer();
+            mouseDetectTimer.Elapsed += timer_Elapsed;
+            mouseDetectTimer.Start();
+        }
+        //실시간 좌표 감지 종료
+        private void mouseDetectStop(object sender, EventArgs e)
+        {
+            mouseDetectTimer.Stop();
+            mouseDetectTimer.Dispose();
+            mouseDetectTimer = null;
+        }
+        delegate void TimerEventFiredDelegate();
+        void timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+        {
+            BeginInvoke(new TimerEventFiredDelegate(Work));
+        }
+        private void Work()
+        {
+            xAbsLocLabel.Text = "X=" + Cursor.Position.X.ToString();
+            yAbsLocLabel.Text = "Y= " + Cursor.Position.Y.ToString();
+            //수행해야할 작업(UI Thread 핸들링 가능)
+        }
+        #endregion
 
         #region 검색어 입력
         private void searchBarStart(string search)
@@ -505,27 +899,66 @@ namespace marketingSolutionProgram
         private void pcNaverSearchbarStart(string search)
         {
             //find search_bar
-            System.Windows.Forms.HtmlDocument doc = webBrowser.Document;
-         //   mshtml.HTMLDocument doc = webBrowser.Document;
-            var searchBar = doc.GetElementById("query");
-            searchBar.SetAttribute("value", search);
 
-            var searchButton = doc.GetElementById("search_btn");
-            searchButton.InvokeMember("submit");
+            mshtml.HTMLDocument doc = webBrowser.Document;
+            //   mshtml.HTMLDocument doc = webBrowser.Document;
+            var searchBar = doc.getElementById("query");
+            searchBar.setAttribute("value", search);
+
+            var searchButton = doc.getElementById("search_btn");
+            searchButton.click();
+            //searchButton.InvokeMember("submit");
             //searchButton.click();
 
         }
+
         private void mobileNaverSearchbarStart(string search)
         {
-            System.Windows.Forms.HtmlDocument doc = webBrowser.Document;
-            //   mshtml.HTMLDocument doc = webBrowser.Document;
-            var searchBar = doc.GetElementById("MM_SEARCH_FAKE");
-            searchBar.SetAttribute("value", search);
-            searchBar.InvokeMember("submit");
+            //mshtml.HTMLDocument doc = ie.Document;
+
+            mshtml.HTMLDocument doc = ie.Document;
+            try
+            {
+                var fakeSearchBar = doc.getElementById("MM_SEARCH_FAKE") as mshtml.IHTMLElement2;
+
+                fakeSearchBar.focus();
+
+                IHTMLElement realSearchBar = doc.getElementById("query");
+                realSearchBar.setAttribute("value", search);
+
+                IHTMLElementCollection buttons = doc.getElementsByTagName("button");
+
+                foreach (IHTMLElement button in buttons)
+                {
+                    string buttonClass = null;
+
+                    buttonClass = button.className;
+                    //Console.WriteLine(classSpan);
+                    if (buttonClass != null && buttonClass.CompareTo("sch_submit MM_SEARCH_SUBMIT") == 0)
+                    {
+                        Console.WriteLine("class correct");
+                        button.click();
+                        return;
+                    }
+                }
+                Console.WriteLine(webBrowser.LocationURL);
+                //   mshtml.HTMLDocument doc = webBrowser.Document;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+
+            //mshtml.IHTMLElement searchBar = webBrowser.Document.GetElementById("MM_SEARCH_FAKE");
+            //searchBar.setAttribute("value", search);
+            //searchBar.setAttribute 
+            //searchBar.parentElement.click();
+            //Console.WriteLine(searchBar.parentElement.parentElement.outerHTML);
           
         }
         private void pcDaumSearchbarStart(string search)
         {
+
             mshtml.HTMLDocument doc = ie.Document;
             var searchBar = doc.getElementById("q");
             searchBar.setAttribute("value", search);
@@ -534,16 +967,17 @@ namespace marketingSolutionProgram
             var searchButton = doc2.DocumentNode.SelectSingleNode("//*[@id='daumSearch']/fieldset/div/div/button[2]");
 
             var buttons = doc.getElementsByTagName("button");
-            foreach(IHTMLElement button in buttons )
+            foreach (IHTMLElement button in buttons)
             {
-                if(searchButton.Attributes["class"].Value.CompareTo(button.className) == 0)
+                string buttonClass = button.className;
+                if (buttonClass !=null && searchButton.Attributes["class"].Value.CompareTo(button.className) == 0)
                 {
                     Console.WriteLine("class correct");
                     button.click();
                     return;
                 }
             }
-            
+
 
         }
         private void mobileDaumSearchbarStart(string search)
@@ -552,14 +986,14 @@ namespace marketingSolutionProgram
             var searchBar = doc.getElementById("q");
             searchBar.setAttribute("value", search);
 
-            //*[@id='form_totalsearch']/fieldset/div/div/button[3]
             HtmlAgilityPack.HtmlDocument doc2 = new HtmlWeb().Load(webBrowser.LocationURL);
-            var searchButton = doc2.DocumentNode.SelectSingleNode("//*[@id='daumSearch']/fieldset/div/div/button[2]");
+            var searchButton = doc2.DocumentNode.SelectSingleNode("//*[@id='daumSearch']/fieldset/div/div/button[3]");
 
             var buttons = doc.getElementsByTagName("button");
             foreach (IHTMLElement button in buttons)
             {
-                if (searchButton.Attributes["class"].Value.CompareTo(button.className) == 0)
+                String buttonClass = button.className;
+                if (buttonClass != null && searchButton.Attributes["class"].Value.CompareTo(button.className) == 0)
                 {
                     Console.WriteLine("class correct");
                     button.click();
@@ -568,16 +1002,51 @@ namespace marketingSolutionProgram
             }
 
         }
-        
+
         #endregion
 
-        private void processStart()
+        private void processStopButton_Click(object sender, EventArgs e)
         {
+            currentMacroLabel.Text = "현재 진행 명령 : 작업을 중단 중입니다. 현재 명령까지 실행함.";
+            worker.CancelAsync();
+        }
 
+        private void processStartButton_Click(object sender, EventArgs e)
+        {
+            processStartButton.Enabled = false;
+            macroList = String.Empty;
+            macroList = macroListTextBox.Text;
+            List<string> splitMacroList = new List<string>(macroList.Split(new string[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries));
+            int macroListLength = splitMacroList.Count;
+
+            //작업 명령이 하나도 입력되지 않았을 때
+            if (macroListLength == 0)
+                MessageBox.Show("작업 명령이 작성되지 않았습니다..");
+
+            //접속 명령어가 제일 먼저 시작하지 않으면 시작이 안되게 해야함.
+            if (!splitMacroList[0].StartsWith("▶0.이동"))
+                MessageBox.Show("첫 작업으로 이동명령을 추가해야합니다.");
+            else
+            {
+                log.Debug("\n\n\n");
+                progressBar1.Style = ProgressBarStyle.Marquee;
+                progressBar1.MarqueeAnimationSpeed = 50;
+                worker = new BackgroundWorker();
+                // worker.DoWork += (obj, ev) => bw_DoWork(splitMacroList, macroListLength, ev);
+                worker.WorkerSupportsCancellation = true;
+                //  worker.RunWorkerCompleted += bw_RunWorkerCompleted;
+                worker.RunWorkerAsync();
+            }
+        }
+
+        private void urlClearButton_Click(object sender, EventArgs e)
+        {
+            inputUrlTextbox.Clear();
         }
     }
 
 
+    #region 로딩 완료 확장 메서드
     // 페이지 로딩 완료까지 대기하는 확장 메서드
     public static class SHDovVwEx
     {
@@ -590,4 +1059,6 @@ namespace marketingSolutionProgram
             System.Threading.Thread.Sleep(millisecond);
         }
     }
+    #endregion
+
 }
