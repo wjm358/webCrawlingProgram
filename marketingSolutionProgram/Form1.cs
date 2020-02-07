@@ -162,6 +162,7 @@ namespace marketingSolutionProgram
 
             if (keywordElement == null)
             {
+                Console.WriteLine("null");
                 //mindocument에 없는 것임
                 if (isPresentIframe() == true)
                 {
@@ -229,6 +230,8 @@ namespace marketingSolutionProgram
             }
             else
             {
+                Console.WriteLine(keywordElement.InnerHtml);
+               
                 //maindocument에 존재
                 tagName = keywordElement.Name;
                 IHTMLElementCollection elements = ie.Document.getElementsByTagName(tagName);
@@ -238,7 +241,6 @@ namespace marketingSolutionProgram
                     if (temp.innerText != null && temp.innerText.CompareTo(keywordElement.InnerText) == 0)
                     {
                         temp.click();
-
                         return;
                     }
                 }
@@ -266,10 +268,41 @@ namespace marketingSolutionProgram
                 {
                     Console.WriteLine("findByHref good");
                     temp.click();
-                    break;
+                    return;
                 }
             }
 
+            //main document에 존재하지 않음
+            Console.WriteLine("null");
+            //mindocument에 없는 것임
+            if (isPresentIframe() == true)
+            {
+
+                mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
+                Console.WriteLine(doc1.frames.length);
+                for (int i = 0; i < doc1.frames.length; i++)
+                {
+                    object index = i;
+                    mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc1.frames.item(ref index);
+                    doc1 = (mshtml.HTMLDocument)frame.document;
+
+                    var aTags = doc1.getElementsByTagName("a");
+
+                    foreach (IHTMLElement a in aTags)
+                    {
+                        string href = a.getAttribute("href");
+
+                        if (href != null && href.CompareTo(keyword) == 0)
+                        {
+                            a.click();
+                            webBrowser.Refresh();
+                            Thread.Sleep(5000);
+                            Console.WriteLine(webBrowser.LocationURL);
+                            return;
+                        }
+                    }
+                }
+            }
         }
 
         //check in main document
@@ -330,7 +363,7 @@ namespace marketingSolutionProgram
                 if (count == randomIndex)
                 {
                     element.click();
-                    break;
+                    return; ;
                 }
                 count++;
             }
@@ -340,7 +373,7 @@ namespace marketingSolutionProgram
         {
             if (isPresentIframe() == false)
             {
-                //main document 에서 실행
+                //main document 에서 실행 <- iframe이 존재하지 않으므로
                 mshtml.HTMLDocument doc = ie.Document;
                 var elements = doc.getElementsByTagName("a");
                 int randomIndex = getRandomIndex(elements.length);
@@ -349,6 +382,31 @@ namespace marketingSolutionProgram
             }
             else
             {
+                int randomIndex = getRandomIndex(1);
+                bool mainDocumentIsChoiced = randomIndex == 0 ? false : true;
+                if(mainDocumentIsChoiced == true)
+                {
+                    //maindocument에서 수행 
+                    mshtml.HTMLDocument doc = ie.Document;
+                    var elements = doc.getElementsByTagName("a");
+                    randomIndex = getRandomIndex(elements.length);
+                    elementClick(randomIndex, elements);
+                }
+                else
+                {
+                    //iframe에서 수행
+                    int iframeCount = getIframeCount();
+                    randomIndex = getRandomIndex(iframeCount);
+                    object index = randomIndex;
+
+                    mshtml.HTMLDocument doc = (mshtml.HTMLDocument)webBrowser.Document;
+                    mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc.frames.item(ref index);
+                    doc = (mshtml.HTMLDocument)frame.document;
+
+                    var aTags = doc.getElementsByTagName("a");
+                    randomIndex = getRandomIndex(aTags.length);
+                    elementClick(randomIndex, aTags);
+                }
 
             }
         }
@@ -365,7 +423,10 @@ namespace marketingSolutionProgram
             string url = @"https://www.naver.com";
             ie.Navigate(url);
             ie.Wait();
+            //SHDocVw.WebBrowser_V1 axBrowser = (WebBrowser_V1)webBrowser.ActiveXInstance;
 
+            // listen for new windows  
+            //axBrowser.NewWindow += axBrowser_NewWindow;
             mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
             Console.WriteLine(doc1.frames.length);
             object index = 3;
@@ -744,7 +805,6 @@ namespace marketingSolutionProgram
                         return;
                     }
 
-
                     macroString = splitMacroList[i].Trim().Substring(1); //특수문자 제거
                     printCurrentMacro(macroString); //현재 명령을 라벨에 출력
 
@@ -783,9 +843,12 @@ namespace marketingSolutionProgram
                                     clearHistory();
                                     break;
                                 case 3:
-                                    //검색
+                                    //
+                                    
                                     string search = macroString.Substring(macroString.IndexOf("=") + 1);
                                     searchStart(search);
+                                    Thread.Sleep(2000);
+                                    Console.WriteLine(ie.LocationURL);
                                     break;
                                 case 4:
                                     //게시글 or 버튼클릭
@@ -793,13 +856,18 @@ namespace marketingSolutionProgram
                                     //키워드검색=뉴스$블로그$부동산
                                     string keyword = macroString.Substring(macroString.IndexOf("=") + 1).Trim();
                                     string[] keywordNum = keyword.Split(new char[] { '$' });
+                                    bool result = false;
+                                    int keywordLength = keyword.Length;
+                                    int randomIndex = getRandomIndex(keywordLength);
+                                    string selectedKeyword = keywordNum[randomIndex];
+
                                     if (indexString.StartsWith("키워드"))
                                     {
-                                        //keyword_search(ref driver, keywordNum);
+                                        findByKeyword(selectedKeyword);
                                     }
                                     else
                                     {
-                                        //searchLink(ref driver, keywordNum);
+                                        findByHref(selectedKeyword);
                                     }
                                     break;
                                 case 5:
@@ -934,7 +1002,7 @@ namespace marketingSolutionProgram
         private void searchStart(string search)
         {
             //mobile버전 / pc버전
-            string prefixUrl = string.Empty;
+            string prefixUrl = ie.LocationURL.Substring(8) ;
             //수정해야함
             Console.WriteLine("prefixUrl : " + prefixUrl);
             string[] splitUrl = prefixUrl.Split(new char[] { '.' });
@@ -1125,7 +1193,37 @@ namespace marketingSolutionProgram
         }
     }
 
+    /*
+     *  // 특정 URL을 갖는 IE 찾기
+    WebBrowser wb = FindIE("https://www.google.com");
 
+    // URL을 다른 것으로 변경
+    if (wb != null)
+    {
+       wb.Navigate("www.bing.com");
+    }
+}        
+
+static SHDocVw.WebBrowser FindIE(string url)
+{
+    Uri uri = new Uri(url);
+    var shellWindows = new SHDocVw.ShellWindows();
+    foreach (SHDocVw.WebBrowser wb in shellWindows)
+    {
+        //File Explorer인 경우 LocationURL가 비어있음. 제외.
+        if (!string.IsNullOrEmpty(wb.LocationURL))
+        {
+            Uri wbUri = new Uri(wb.LocationURL);
+            Debug.WriteLine(wbUri);
+            if (wbUri.Equals(uri))
+            {
+                return wb;
+            }
+        }
+    }
+    return null;
+}
+     * */
     #region 로딩 완료 확장 메서드
     // 페이지 로딩 완료까지 대기하는 확장 메서드
     public static class SHDovVwEx
