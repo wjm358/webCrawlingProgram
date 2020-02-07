@@ -34,3 +34,4 @@ C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bi
 C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Debug\marketingSolutionProgram.csprojAssemblyReference.cache
 C:\Users\wjm35\source\repos\wjm358\marketingSolutionProject\marketingSolutionProgram\bin\Debug\log4net.dll
 C:\Users\wjm35\source\repos\wjm358\marketingSolutionProject\marketingSolutionProgram\bin\Debug\log4net.xml
+C:\Users\wjm35\source\repos\wjm358\marketingSolutionProject\marketingSolutionProgram\bin\Debug\Interop.SHDocVw.dll

@@ -31,7 +31,7 @@ namespace marketingSolutionProgram
         private const int MOUSEEVENTF_LEFTUP = 0x04;
         private const int MOUSEEVENTF_RIGHTDOWN = 0x08;
         private const int MOUSEEVENTF_RIGHTUP = 0x10;
-
+        private IWebBrowser2 _webBrowser2;
         int indexNum = 0;
         int macroListTextboxCursor = 0;
 
@@ -234,7 +234,7 @@ namespace marketingSolutionProgram
                
                 //maindocument에 존재
                 tagName = keywordElement.Name;
-                IHTMLElementCollection elements = ie.Document.getElementsByTagName(tagName);
+                IHTMLElementCollection elements = ((mshtml.HTMLDocument)ie.Document).getElementsByTagName(tagName);
                 //main document에서 조사
                 foreach (IHTMLElement temp in elements)
                 {
@@ -255,7 +255,7 @@ namespace marketingSolutionProgram
 
         public void findByHref(string keyword)
         {
-            mshtml.HTMLDocument doc = ie.Document;
+            mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
             var elements = doc.getElementsByTagName("a");
             keyword = makeToHrefString(ref keyword);
             string hrefString = string.Empty;
@@ -339,7 +339,6 @@ namespace marketingSolutionProgram
         //href format 체크 후 convert
         public string makeToHrefString(ref string keyword)
         {
-
             if (keyword.StartsWith("href"))
             {
                 keyword = keyword.Substring(keyword.IndexOf("="));
@@ -374,7 +373,7 @@ namespace marketingSolutionProgram
             if (isPresentIframe() == false)
             {
                 //main document 에서 실행 <- iframe이 존재하지 않으므로
-                mshtml.HTMLDocument doc = ie.Document;
+                mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
                 var elements = doc.getElementsByTagName("a");
                 int randomIndex = getRandomIndex(elements.length);
                 elementClick(randomIndex, elements);
@@ -387,7 +386,7 @@ namespace marketingSolutionProgram
                 if(mainDocumentIsChoiced == true)
                 {
                     //maindocument에서 수행 
-                    mshtml.HTMLDocument doc = ie.Document;
+                    mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
                     var elements = doc.getElementsByTagName("a");
                     randomIndex = getRandomIndex(elements.length);
                     elementClick(randomIndex, elements);
@@ -774,12 +773,35 @@ namespace marketingSolutionProgram
             }
             macroListTextBox.Text += macroString + "\r\n";
         }
+        [DllImport("user32.dll")]
+        static extern int GetForegroundWindow();
 
+        
         bool checkRegex(string checkString, string pattern)
         {
             return Regex.IsMatch(checkString, pattern);
         }
+        private void getWin()
+        {
+            //[0] 현재의 윈두우 핸들 얻기
+            int handle = GetForegroundWindow();
 
+
+            //[1] SHDocVw 의 브라우저에서 현재부라우져들 검출 
+            foreach (SHDocVw.WebBrowser wb in new ShellWindowsClass())
+            {
+                //[2] 각각의 브라우져 핸들과 현제Top의 핸들 검출
+                if (wb.HWND.Equals(handle))
+                {
+                    //[3] 검출된 브라우져의 타입캐스팅
+                    InternetExplorer ie = wb as InternetExplorer;
+                    string _name = ie.Name;
+                    string _resultURL = ie.LocationURL;
+                    Console.WriteLine(_name + " " + _resultURL);
+                }
+            }
+        }
+        
         #region BackgroundWorker event define
         void bw_DoWork(List<string> splitMacroList, int macroListLength, DoWorkEventArgs e)
         {
@@ -805,6 +827,7 @@ namespace marketingSolutionProgram
                         return;
                     }
 
+                    //ie.NewWindow2
                     macroString = splitMacroList[i].Trim().Substring(1); //특수문자 제거
                     printCurrentMacro(macroString); //현재 명령을 라벨에 출력
 
@@ -837,6 +860,7 @@ namespace marketingSolutionProgram
                                     }
                                     ie.Navigate(url);
                                     ie.Wait();
+                                    getWin();
                                     break;
                                 case 2:
                                     //검색 기록 삭제
@@ -857,8 +881,10 @@ namespace marketingSolutionProgram
                                     string keyword = macroString.Substring(macroString.IndexOf("=") + 1).Trim();
                                     string[] keywordNum = keyword.Split(new char[] { '$' });
                                     bool result = false;
-                                    int keywordLength = keyword.Length;
+                                    int keywordLength = keywordNum.Length;
+                                   
                                     int randomIndex = getRandomIndex(keywordLength);
+                                    Console.WriteLine(randomIndex);
                                     string selectedKeyword = keywordNum[randomIndex];
 
                                     if (indexString.StartsWith("키워드"))
@@ -869,6 +895,7 @@ namespace marketingSolutionProgram
                                     {
                                         findByHref(selectedKeyword);
                                     }
+                                    getWin();
                                     break;
                                 case 5:
                                     //랜덤검색
@@ -1038,7 +1065,7 @@ namespace marketingSolutionProgram
         {
             //find search_bar
 
-            mshtml.HTMLDocument doc = webBrowser.Document;
+            mshtml.HTMLDocument doc = (mshtml.HTMLDocument)webBrowser.Document;
             //   mshtml.HTMLDocument doc = webBrowser.Document;
             var searchBar = doc.getElementById("query");
             searchBar.setAttribute("value", search);
@@ -1053,7 +1080,7 @@ namespace marketingSolutionProgram
         {
             //mshtml.HTMLDocument doc = ie.Document;
 
-            mshtml.HTMLDocument doc = ie.Document;
+            mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
             try
             {
                 var fakeSearchBar = doc.getElementById("MM_SEARCH_FAKE") as mshtml.IHTMLElement2;
@@ -1096,7 +1123,7 @@ namespace marketingSolutionProgram
         private void pcDaumSearchbarStart(string search)
         {
 
-            mshtml.HTMLDocument doc = ie.Document;
+            mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
             var searchBar = doc.getElementById("q");
             searchBar.setAttribute("value", search);
 
@@ -1121,7 +1148,7 @@ namespace marketingSolutionProgram
         {
             try
             {
-                mshtml.HTMLDocument doc = ie.Document;
+                mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
                 var searchBar = doc.getElementById("q");
                 searchBar.setAttribute("value", search);
 
