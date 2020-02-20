@@ -18,20 +18,77 @@ using System.Net;
 using System.Net.Sockets;
 using log4net;
 using System.Text.RegularExpressions;
+using System.Security.Principal;
+
+[assembly: log4net.Config.XmlConfigurator(Watch = true)]
 
 namespace marketingSolutionProgram
 {
     public partial class Form1 : Form
     {
+        private ILog log = LogManager.GetLogger("Program");
         BackgroundWorker worker;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
+
+        [DllImport("user32.dll", EntryPoint = "FindWindow", SetLastError = true)]
+        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        static extern IntPtr SendMessage(IntPtr hWnd, UInt32 Msg, int wParam, int lParam);
+        private const int BM_CLICK = 0xF5;
+        private const uint WM_ACTIVATE = 0x6;
+        private const int WA_ACTIVE = 1;
+
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        static extern IntPtr SetFocus(IntPtr handle);
+        [DllImport("user32.dll")]
+        static extern IntPtr GetFocus();
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+
+        private const int SW_SHOWNORMAL = 1;
+        private const int SW_SHOWMINIMIZED = 2;
+        private const int SW_SHOWMAXIMIZED = 3;
+
+        [Flags]
+        public enum KeyFlag
+        {
+            /// <summary>
+            /// 키 누름
+            /// </summary>
+            KE_DOWN = 0,
+            /// <summary>
+            /// 확장 키
+            /// </summary>
+            KE__EXTENDEDKEY = 1,
+            /// <summary>
+            /// 키 뗌
+            /// </summary>
+            KE_UP = 2
+        }
+
+        [DllImport("User32.dll")]
+        static extern void keybd_event(byte vk, byte scan, int flags, int extra);
+
+        const int WM_GETTEXT = 0x000D;
+        const int WM_GETTEXTLENGTH = 0x000E;
+        const int WM_SETTEXT = 0x000C;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto, CallingConvention = CallingConvention.StdCall)]
         public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint cButtons, uint dwExtraInfo);
+
         private const int MOUSEEVENTF_LEFTDOWN = 0x02;
         private const int MOUSEEVENTF_LEFTUP = 0x04;
         private const int MOUSEEVENTF_RIGHTDOWN = 0x08;
         private const int MOUSEEVENTF_RIGHTUP = 0x10;
-        private IWebBrowser2 _webBrowser2;
+
+
         int indexNum = 0;
         int macroListTextboxCursor = 0;
 
@@ -41,15 +98,16 @@ namespace marketingSolutionProgram
         string macroList = String.Empty;
 
         private Stopwatch totalsw = null;
-        private ILog log = LogManager.GetLogger("Program");
+
         System.Timers.Timer mouseDetectTimer = null; //좌표 감지에 쓰이는 타이머
         Random random = null;
+        Thread workerThread = null;
 
         InternetExplorer ie = null;
         SHDocVw.WebBrowser webBrowser = null;
         HtmlAgilityPack.HtmlDocument document;
         HtmlNodeCollection nodes;
-
+        
         #region 변수 재활용
         private Stopwatch setTotalSw()
         {
@@ -72,6 +130,7 @@ namespace marketingSolutionProgram
         }
         #endregion
 
+        #region 체류시간 설정
         private void sleep(int s, int e)
         {
             random = setRandomInstance();
@@ -79,6 +138,7 @@ namespace marketingSolutionProgram
             Thread.Sleep(randomSecond * 1000);
             return;
         }
+        #endregion
 
         #region 마우스 클릭 이벤트
         public void LeftDoubleClick(string xpos, string ypos)
@@ -105,7 +165,21 @@ namespace marketingSolutionProgram
         public Form1()
         {
             InitializeComponent();
+            deleteAllIeProcesses();
 
+            rk =
+      Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings\5.0\User Agent", true);
+            rk.SetValue(null, "");
+        }
+
+        //ie프로세스 모두 삭제
+        public void deleteAllIeProcesses()
+        {
+            Process[] IeProcesses = Process.GetProcessesByName("iexplore");
+            foreach (var IeProcess in IeProcesses)
+            {
+                IeProcess.Kill();
+            }
         }
 
         //check iframe length
@@ -115,9 +189,13 @@ namespace marketingSolutionProgram
 
             try
             {
-                document = new HtmlWeb().Load(webBrowser.LocationURL);
+                Console.WriteLine(ie.LocationURL);
+                document = new HtmlWeb().Load(ie.LocationURL);
                 nodes = document.DocumentNode.SelectNodes("//iframe[@src]");
-                count = nodes.Count;
+
+                if (nodes != null)
+                    count = nodes.Count;
+
             }
             catch (Exception ex)
             {
@@ -139,109 +217,187 @@ namespace marketingSolutionProgram
 
         }
 
-        public bool compareInIframe()
+        public bool ExplorerMessage()
         {
-            bool result = false;
-            return result;
-        }
-
-        public int getIframeIndex()
-        {
-            int count = 0;
-            return count;
-        }
-
-        public void findByKeyword(string keyword)
-        {
-            // declaring & loading dom
-            HtmlWeb web = new HtmlWeb();
-            HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
-            doc = web.Load(webBrowser.LocationURL);
-            var keywordElement = doc.DocumentNode.SelectSingleNode("//*[text()[contains(., '" + keyword + "' )]]");
-            string tagName = null;
-
-            if (keywordElement == null)
+            var hwnd = FindWindow("#32770", "Internet Explorer");
+            if (hwnd != IntPtr.Zero)
             {
-                Console.WriteLine("null");
-                //mindocument에 없는 것임
+                SetForegroundWindow((IntPtr)ie.HWND);
+               
+                SendKeys.SendWait("{ESC}");
+                return true;
+            }
+            return false;
+
+        }
+     
+        //close alert when pop up alert
+        public void ActivateAndClickOkButton()
+        {
+            // find dialog window with titlebar text of "Message from webpage"
+
+            for (int i = 0; i < 6; i++)
+            {
+
+                if (ExplorerMessage() == true)
+                {
+                    Console.WriteLine("explorerMessage true");
+                    log.Debug("exlorerMessage true");
+                    return;
+                }
+
+                var hwnd = FindWindow("#32770", "웹 페이지 메시지");
+                if (hwnd != IntPtr.Zero)
+                {
+                    SetForegroundWindow((IntPtr)ie.HWND);
+                    SendKeys.SendWait("{ESC}");
+                    Console.WriteLine("esc complete");
+                    log.Debug("esc complete");
+                    return;
+
+                    // find button on dialog window: classname = "Button", text = "OK"
+                    var btn = FindWindowEx(hwnd, IntPtr.Zero, "Button", "취소");
+
+
+                    if (btn != IntPtr.Zero)
+                    {
+
+                        // activate the button on dialog first or it may not acknowledge a click msg on first try
+                        SendMessage(btn, WM_ACTIVATE, WA_ACTIVE, 0);
+                        // send button a click message
+
+                        SendMessage(btn, BM_CLICK, 0, 0);
+                        return;
+                    }
+                    else
+                    {
+                        btn = FindWindowEx(hwnd, IntPtr.Zero, "Button", "확인");
+                        if (btn != IntPtr.Zero)
+                        {
+                            // activate the button on dialog first or it may not acknowledge a click msg on first try
+                            SendMessage(btn, WM_ACTIVATE, WA_ACTIVE, 0);
+                            // send button a click message
+
+                            SendMessage(btn, BM_CLICK, 0, 0);
+                            return;
+                        }
+                        //btn = FindWindowEx(hwnd,IntPtr.Zero, "Button", )
+                        //Interaction.MsgBox("button not found!");
+                    }
+                }
+                else
+                {
+                    Thread.Sleep(1000);
+
+                    //Interaction.MsgBox("window not found!");
+                }
+            }
+
+        }
+
+        bool findByKeyword(string keyword)
+        {
+            HtmlWeb web = new HtmlWeb();
+            mshtml.HTMLDocument aa = (mshtml.HTMLDocument)webBrowser.Document;
+
+            var documentAsIHtmlDocument3 = (mshtml.IHTMLDocument3)aa;
+            StringReader sr = new StringReader(documentAsIHtmlDocument3.documentElement.outerHTML);
+            HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
+            doc.Load(sr);
+
+            Console.WriteLine("findByKeyword :" + ie.LocationURL);
+            //doc = web.Load(ie.LocationURL);
+            //doc.LoadHtml(ie.Document.documentElement.outerHTML);
+            //HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
+            //doc.LoadHtml(ie.Document.DocumentElement.outerHTML);
+
+            var keywordElement = doc.DocumentNode.SelectSingleNode("//*[text()[contains(., '" + keyword + "' )]]");
+
+            string tagName = null;
+            //mindocument에 없는 것임
+            if (keywordElement == null)
+
+            {
+                Console.WriteLine("keywordElement is null");
+                //doesn't exist in mainDocument
                 if (isPresentIframe() == true)
                 {
-                    //int iframeCount = getIframeCount();
+                    Console.WriteLine("isPresentIframe method returned true");
 
-                    mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
-                    Console.WriteLine(doc1.frames.length);
-                    for (int i = 0; i < doc1.frames.length; i++)
+                    mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)ie.Document;
+                    FramesCollection framesList = doc1.frames;
+
+                    for (int i = 0; i < framesList.length; i++)
                     {
-                        object index = i;
-                        mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc1.frames.item(ref index);
+                        Console.WriteLine(i);
+                        object index = (object)i;
+
+                        mshtml.HTMLWindow2 frame = (mshtml.HTMLWindow2)framesList.item(ref index);
                         doc1 = (mshtml.HTMLDocument)frame.document;
+
 
                         var htmlDoc = new HtmlAgilityPack.HtmlDocument();
                         htmlDoc.LoadHtml(doc1.documentElement.outerHTML);
-                        var ress = htmlDoc.DocumentNode.SelectSingleNode("//*[text()[contains(., '" + keyword + "' )]]");
-                        if (ress != null) tagName = ress.Name;
 
-                        Console.WriteLine(tagName + "이거 맞아? ");
-                        if (tagName == null) Console.WriteLine("tagName is null");
-                        else { Console.WriteLine(ress.GetAttributeValue("href", "")); }
+                        keywordElement = htmlDoc.DocumentNode.SelectSingleNode("//*[text()[contains(., '" + keyword + "' )]]");
+                        if (keywordElement != null) tagName = keywordElement.Name;
 
-                        var elements = doc1.getElementsByTagName("a");
+                        if (tagName == null) continue;
+
+                        var elements = doc1.getElementsByTagName(tagName);
 
                         foreach (IHTMLElement element in elements)
                         {
                             string href = element.innerText;
-                            if (href != null) Console.WriteLine("href : " + href);
-                            if (href != null && href.CompareTo(ress.InnerText) == 0)
-                            {
 
+                            if (href != null && keywordElement.InnerText != null && href.CompareTo(keywordElement.InnerText.Replace("\r\n","")) == 0)
+                            {
                                 element.click();
-                                webBrowser.Refresh();
-                                Thread.Sleep(5000);
-                                Console.WriteLine(webBrowser.LocationURL);
-                                return ;
+
+                                return true;
                             }
                         }
                     }
-
-                    //for (int i = 0; i < iframeCount; i++)
-                    //{
-
-                    //    mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
-                    //    object index = i;
-                    //    mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc1.frames.item(ref index);
-                    //    doc1 = (mshtml.HTMLDocument)frame.document;
-                    //    Console.WriteLine(doc1.documentElement.innerHTML);
-
-                    //    IHTMLElementCollection iframeElements = doc1.getElementsByTagName(tagName);
-                    //    foreach (IHTMLElement temp in iframeElements)
-                    //    {
-                    //        if (temp.innerText != null && temp.innerText.CompareTo(keywordElement.InnerText) == 0)
-                    //        {
-                    //            Console.WriteLine("click " + webBrowser.LocationURL);
-                    //            temp.click();
-                    //            Thread.Sleep(3000);
-                    //            return;
-                    //        }
-                    //    }
-                    //    //for문 종료
-                    //}
-                    //if 문 내부 종료
                 }
+               
+
             }
             else
             {
-                Console.WriteLine(keywordElement.InnerHtml);
-               
-                //maindocument에 존재
+                Console.WriteLine("keywordElement is not null");
+                //exist in mainDocument
                 tagName = keywordElement.Name;
-                IHTMLElementCollection elements = ((mshtml.HTMLDocument)ie.Document).getElementsByTagName(tagName);
+
+                var elements = aa.getElementsByTagName(tagName);
+                Console.WriteLine(tagName+ "," + elements.length);
                 //main document에서 조사
+           
                 foreach (IHTMLElement temp in elements)
                 {
-                    if (temp.innerText != null && temp.innerText.CompareTo(keywordElement.InnerText) == 0)
+                    string tempString = temp.innerText;
+                    if(tempString !=null )
                     {
+                        tempString = tempString.Trim();
+                       
+                    }
+                     //string tempString = temp.innerText.Replace("\r\n","").Trim();
+                    
+                    //if(temp.innerText !=null)
+                    //{
+                    //    if(temp.innerText.CompareTo("여행맛집")== 0)
+                    //    {
+                    //        Console.WriteLine("correct");
+                    //    }
+
+                    //}
+                    if (tempString != null && tempString.CompareTo(keyword) == 0)
+                    {
+
+                        Console.WriteLine("clcickㄷㅇㄷㅇ");
                         temp.click();
-                        return;
+
+
+                        return true;
                     }
                 }
 
@@ -250,13 +406,14 @@ namespace marketingSolutionProgram
 
 
 
-
+            return false;
         }
 
         public void findByHref(string keyword)
         {
             mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
             var elements = doc.getElementsByTagName("a");
+
             keyword = makeToHrefString(ref keyword);
             string hrefString = string.Empty;
 
@@ -266,21 +423,19 @@ namespace marketingSolutionProgram
 
                 if (hrefString != null && hrefString.CompareTo(keyword) == 0)
                 {
-                    Console.WriteLine("findByHref good");
                     temp.click();
+
                     return;
                 }
             }
 
             //main document에 존재하지 않음
-            Console.WriteLine("null");
-            //mindocument에 없는 것임
             if (isPresentIframe() == true)
             {
+                mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)ie.Document;
+                FramesCollection framesList = doc1.frames;
 
-                mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
-                Console.WriteLine(doc1.frames.length);
-                for (int i = 0; i < doc1.frames.length; i++)
+                for (int i = 0; i < framesList.length; i++)
                 {
                     object index = i;
                     mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc1.frames.item(ref index);
@@ -295,45 +450,12 @@ namespace marketingSolutionProgram
                         if (href != null && href.CompareTo(keyword) == 0)
                         {
                             a.click();
-                            webBrowser.Refresh();
-                            Thread.Sleep(5000);
-                            Console.WriteLine(webBrowser.LocationURL);
+
                             return;
                         }
                     }
                 }
             }
-        }
-
-        //check in main document
-        public bool isInMainDocument(string[] keyword, bool isHref)
-        {
-            bool result = false;
-            int keywordLength = keyword.Length;
-            int randomIndex = getRandomIndex(keywordLength);
-            string selectedKeyword = keyword[randomIndex];
-
-            if (isHref)
-            {
-                //href 검색
-                findByHref(selectedKeyword);
-
-            }
-            else
-            {
-                //keyword 검색
-                findByKeyword(selectedKeyword);
-            }
-
-            return result;
-        }
-
-        public bool isInIframe(string keyword)
-        {
-            bool result = false;
-
-
-            return result;
         }
 
         //href format 체크 후 convert
@@ -354,230 +476,181 @@ namespace marketingSolutionProgram
             return randomIndex;
         }
 
-        public void elementClick(int randomIndex, IHTMLElementCollection elements)
+
+        public bool elementClick(int cnt ,int randomIndex, IHTMLElementCollection elements)
         {
             int count = 0;
-            foreach (IHTMLElement element in elements)
+            foreach (mshtml.IHTMLDOMNode element in elements)
             {
                 if (count == randomIndex)
                 {
-                    element.click();
-                    return; ;
+                    //IHTMLAttributeCollection attrs = element.attributes;
+                    //if (attrs != null)
+                    //{
+                    //    foreach (IHTMLDOMAttribute at in attrs)
+                    //    {
+                    //        if (at.specified)
+                    //        {
+                              
+                    //            string nodeValue = "";
+                    //            if (at.nodeValue != null)
+                    //                nodeValue = at.nodeName.ToString();
+                    //            if (nodeValue.CompareTo("onclick") == 0)
+                    //            {
+                    //                Console.WriteLine(cnt + ", onclick");
+                    //                return false;
+                    //            }
+                    //        }
+                    //    }
+                    //}
+
+                        ((mshtml.IHTMLElement)element).click();
+                        return true;
+
                 }
                 count++;
             }
+          
+            return false;
         }
+
+
+        public void elementClickRepeatA()
+        {
+            mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
+            bool result = false;
+            int count = 0;
+            while (result == false && count < 10)
+            {
+             
+                var elements = doc.getElementsByTagName("a");
+                int randomIndex = getRandomIndex(elements.length);
+
+                result = elementClick(count, randomIndex, elements);
+                count++; 
+
+            }
+
+
+        }
+        public void elementClickRepeatB()
+        {
+            mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
+            bool result = false;
+            int count = 0;
+                //iframe에서 수행
+                int iframeCount = getIframeCount();
+                int randomIndex = getRandomIndex(iframeCount);
+                object index = (object)randomIndex;
+                mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc.frames.item(ref index);
+            while (result == false && count < 10)
+            {
+
+
+                if (frame.document != null)
+                    doc = (mshtml.HTMLDocument)frame.document;
+                else return;
+
+                var aTags = doc.getElementsByTagName("a");
+                randomIndex = getRandomIndex(aTags.length);
+                result = elementClick(count, randomIndex, aTags);
+                count++;
+            }
+
+
+        }
+        public void clickRandomlyExceptOnclick()
+        {
+            if (isPresentIframe() == false)
+            {
+                Console.WriteLine("isPresentIFrame false");
+                elementClickRepeatA();
+
+            }
+            else
+            {
+                //iframe이 존재
+                //http://rpp.gmarket.co.kr/?exhib=33275 <<- about:blank 제외해야함
+                int randomIndex = getRandomIndex(2);
+                bool mainDocumentIsChoiced = (randomIndex == 0 ? false : true);
+
+                if (mainDocumentIsChoiced == true)
+                {
+
+                    elementClickRepeatA();
+                }
+                else
+                {
+                    // https://m.sports.naver.com/news.nhn?oid=139&aid=0002128129
+                    elementClickRepeatB();
+                }
+
+            }
+        }
+
 
         public void clickRandomly()
         {
+
             if (isPresentIframe() == false)
             {
                 //main document 에서 실행 <- iframe이 존재하지 않으므로
                 mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
                 var elements = doc.getElementsByTagName("a");
                 int randomIndex = getRandomIndex(elements.length);
-                elementClick(randomIndex, elements);
+                elementClick(0,randomIndex, elements);
 
             }
             else
             {
-                int randomIndex = getRandomIndex(1);
-                bool mainDocumentIsChoiced = randomIndex == 0 ? false : true;
-                if(mainDocumentIsChoiced == true)
+                //iframe이 존재
+                //http://rpp.gmarket.co.kr/?exhib=33275 <<- about:blank 제외해야함
+                int randomIndex = getRandomIndex(2);
+                bool mainDocumentIsChoiced = (randomIndex == 0 ? false : true);
+
+                if (mainDocumentIsChoiced == true)
                 {
+
                     //maindocument에서 수행 
                     mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
                     var elements = doc.getElementsByTagName("a");
                     randomIndex = getRandomIndex(elements.length);
-                    elementClick(randomIndex, elements);
+                    elementClick(0,randomIndex, elements);
                 }
                 else
                 {
+                    // https://m.sports.naver.com/news.nhn?oid=139&aid=0002128129
+
                     //iframe에서 수행
                     int iframeCount = getIframeCount();
                     randomIndex = getRandomIndex(iframeCount);
-                    object index = randomIndex;
+                    object index = (object)randomIndex;
 
-                    mshtml.HTMLDocument doc = (mshtml.HTMLDocument)webBrowser.Document;
+                    mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
                     mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc.frames.item(ref index);
-                    doc = (mshtml.HTMLDocument)frame.document;
+
+                    if (frame.document != null)
+                        doc = (mshtml.HTMLDocument)frame.document;
+                    else return;
 
                     var aTags = doc.getElementsByTagName("a");
                     randomIndex = getRandomIndex(aTags.length);
-                    elementClick(randomIndex, aTags);
+                    elementClick(0,randomIndex, aTags);
                 }
 
             }
-        }
-        private void button1_Click(object sender, EventArgs e)
-        {
-            ie = new InternetExplorer();
-            webBrowser = (SHDocVw.WebBrowser)ie;
-
-            //string url = @"http://www.naver.com";
-            webBrowser.Visible = true;
-            //webBrowser.Navigate(url);
-
-            // https://blog.naver.com/kims_pr/221780431616
-            string url = @"https://www.naver.com";
-            ie.Navigate(url);
-            ie.Wait();
-            //SHDocVw.WebBrowser_V1 axBrowser = (WebBrowser_V1)webBrowser.ActiveXInstance;
-
-            // listen for new windows  
-            //axBrowser.NewWindow += axBrowser_NewWindow;
-            mshtml.HTMLDocument doc1 = (mshtml.HTMLDocument)webBrowser.Document;
-            Console.WriteLine(doc1.frames.length);
-            object index = 3;
-            mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc1.frames.item(ref index);
-            doc1 = (mshtml.HTMLDocument)frame.document;
-            //   Console.WriteLine(doc1.documentElement.outerHTML);
-
-            var htmlDoc = new HtmlAgilityPack.HtmlDocument();
-            htmlDoc.LoadHtml(doc1.documentElement.outerHTML);
-
-            var ress = htmlDoc.DocumentNode.SelectSingleNode("//*[text()[contains(., 'G마켓' )]]");
-            string tagName = null;
-
-            if (ress != null) tagName = ress.Name;
-            Console.WriteLine(tagName + "이거 맞아? ");
-            if (tagName == null) Console.WriteLine("tagName is null");
-            else { Console.WriteLine(ress.GetAttributeValue("href", "")); }
-
-            var elements = doc1.getElementsByTagName("a");
-            foreach (IHTMLElement element in elements)
-            {
-                string href = element.innerText;
-                if (href != null) Console.WriteLine("href : " + href);
-                if (href != null && href.CompareTo(ress.InnerText) == 0)
-                {
-
-                    element.click();
-                    webBrowser.Refresh();
-                    Thread.Sleep(5000);
-                    Console.WriteLine(webBrowser.LocationURL);
-                    break;
-                }
-            }
-
-            //   HtmlWeb web = new HtmlWeb();
-            //  HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument();
-            // doc = web.Load(doc1.documentElement.outerHTML); //error
-
-
-
-            // 위 url의 iframe src를 출력한다.
-            /*
-            findByKeyword("G마켓");
-
-            HtmlAgilityPack.HtmlDocument docu = null;
-            HtmlNodeCollection nodes = null; ;
-            try
-            {
-
-                docu = new HtmlWeb().Load("https://blog.naver.com/kims_pr/221780431616");
-
-                //add microsoft mshtml object library reference 
-                mshtml.HTMLDocument doc = (mshtml.HTMLDocument)webBrowser.Document;
-                object index = 0;
-                mshtml.IHTMLWindow2 frame = (mshtml.IHTMLWindow2)doc.frames.item(ref index);
-                doc = (mshtml.HTMLDocument)frame.document;
-                Console.WriteLine(doc.documentElement.innerHTML);
-
-                var elements = doc.getElementsByTagName("a");
-                int elementsLength = elements.length;
-                random = setRandomInstance();
-                int randomIndex = random.Next(0, elementsLength);
-
-                int i = 0;
-                foreach (IHTMLElement element in elements)
-                {
-                    string href = element.getAttribute("href");
-                    if (href != null && i == randomIndex) { Console.WriteLine("click"); element.click(); break; }
-                    i++;
-
-                }
-
-                Thread.Sleep(3000); //로딩 될 떄까지 기다려야 함.
-
-                //  nodes = docu.DocumentNode.SelectNodes("//iframe[@src]");
-
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-            }
-
-    */
-            //foreach (var node in nodes)
-            //{
-            //    try
-            //    {
-            //        HtmlAttribute attr = node.Attributes["src"];
-            //        Console.WriteLine(attr.Value);
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        Console.WriteLine(ex);
-            //    }
-
-            //}
-
-            //foreach(IHTMLElement temp in elements)
-            //{
-            //    if(temp !=null )
-            //    {
-            //        Console.WriteLine(temp.outerHTML);
-            //    }
-            //}
-            //webBrowser2.Document.Body.InnerText
-            // var doc2 = new HtmlAgilityPack.HtmlDocument();
-            HtmlAgilityPack.HtmlDocument doc2 = new HtmlWeb().Load("http://www.naver.com/");
-            //  doc2.Load(url);
-            //doc2.DocumentNode.SelectNodes
-            //var ress = doc2.DocumentNode.SelectSingleNode("//*[text()[contains(., '네이버페이')]]");
-            // Console.WriteLine(ress.Name);
-            //var val = ress.Attributes["href"].Value; //
-            // Console.WriteLine(ress.OuterHtml);
-            //< span class="an_txt">네이버페이</span>
-            //foreach (IHTMLElement temp in elements)
-            //{
-            //    if (temp.innerText != null && temp.innerText.CompareTo("네이버페이") == 0)
-            //    {
-            //        Console.WriteLine("That's correct : " + temp.outerHTML);
-            //        temp.click();
-            //    }
-            //}
 
         }
-
+       
+        //캐시 삭제
         public void clearHistory()
         {
-            string _tempInetFile = Environment.GetFolderPath(Environment.SpecialFolder.InternetCache);
-            string _cookies = Environment.GetFolderPath(Environment.SpecialFolder.Cookies);
-            string _history = Environment.GetFolderPath(Environment.SpecialFolder.History);
-            Console.WriteLine(_tempInetFile);
-            System.IO.DirectoryInfo di = new DirectoryInfo(_tempInetFile);
-            foreach (FileInfo file in di.GetFiles())
-            {
-                file.Delete();
-            }
-            foreach (DirectoryInfo dir in di.GetDirectories())
-            {
-                dir.Delete(true); //delete subdirectories and files
-            }
-            //List<string> folderPathList = new List<string> {  _cookies, _history };
+            deleteAllIeProcesses();
+            ie = null;
 
-            //foreach (string dirpath in folderPathList)
-            //    try
-            //    {
-            //        Console.WriteLine(dirpath);
-            //        Directory.Delete(dirpath, true);
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        Console.WriteLine(ex);
-            //    }
+            System.Diagnostics.Process.Start("rundll32.exe", "InetCpl.cpl,ClearMyTracksByProcess 4351").WaitForExit();
+            Console.WriteLine("history clear d");
+            log.Debug("캐시 삭제 완료");
         }
 
         #region ui변경 methods
@@ -595,6 +668,11 @@ namespace marketingSolutionProgram
                 inputKeywordLabel.Visible = true;
                 inputKeywordTextBox.Visible = true;
             }
+        }
+
+        private void macroListClearButton_Click(object sender, EventArgs e)
+        {
+            macroListTextBox.Clear();
         }
 
         //vmware같은곳에서는 사용할 수 없음. ip address 얻어옴.
@@ -630,23 +708,23 @@ namespace marketingSolutionProgram
         }
 
         //현재 매크로가 시작
-        private void printCurrentMacro(string macroString)
+        private void printCurrentMacro(string macroString, int num)
         {
             if (currentMacroLabel.InvokeRequired)
             {
-                currentMacroLabel.BeginInvoke(new Action(() => { currentMacroLabel.Text = "현재 진행 명령 : " + macroString; }));
+                currentMacroLabel.BeginInvoke(new Action(() => { currentMacroLabel.Text = num + " , " + "현재 진행 명령 : " + macroString; }));
                 return;
             }
         }
 
         //현재 매크로 완료
-        private void endCurrentMacro(string macroString)
+        private void endCurrentMacro(string macroString, int num)
         {
             if (reportTextBox.InvokeRequired)
             {
                 reportTextBox.BeginInvoke(new Action(() =>
                 {
-                    reportTextBox.Text += "작업완료 : " + macroString.Substring(macroString.IndexOf(".") + 1);
+                    reportTextBox.Text += num + " , " + "작업완료 : " + macroString.Substring(macroString.IndexOf(".") + 1) + "\r\n";
 
                     reportTextBox.SelectionStart = reportTextBox.TextLength;
                     reportTextBox.ScrollToCaret();
@@ -676,26 +754,12 @@ namespace marketingSolutionProgram
 + Environment.NewLine;
                     reportTextBox.SelectionStart = reportTextBox.TextLength;
                     reportTextBox.ScrollToCaret();
+                    macroListTextboxCursor = 0;
                 }));
             }
         }
 
-
-        #endregion
-
-        private string checkUrl(string macroString)
-        {
-            bool includeHttp = macroString.StartsWith("http");
-            if (includeHttp == false)
-            {
-                return "https://" + macroString;
-            }
-            else
-            {
-                return macroString;
-            }
-        }
-
+        //매크로 추가 버튼
         private void addMacroButton_Click(object sender, EventArgs e)
         {
             string macroString = String.Empty;
@@ -773,43 +837,69 @@ namespace marketingSolutionProgram
             }
             macroListTextBox.Text += macroString + "\r\n";
         }
-        [DllImport("user32.dll")]
-        static extern int GetForegroundWindow();
 
-        
+
+        private void urlClearButton_Click(object sender, EventArgs e)
+        {
+            inputUrlTextbox.Clear();
+        }
+        #endregion
+
+        private string checkUrl(string macroString)
+        {
+
+            bool includeHttps = macroString.StartsWith("http");
+            if (includeHttps == false)
+            {
+                bool includeHttp = macroString.StartsWith("http");
+
+                return "http://" + macroString;
+            }
+            else
+            {
+                return macroString;
+            }
+        }
+
+        #region BackgroundWorker event define
+
         bool checkRegex(string checkString, string pattern)
         {
             return Regex.IsMatch(checkString, pattern);
         }
-        private void getWin()
-        {
-            //[0] 현재의 윈두우 핸들 얻기
-            int handle = GetForegroundWindow();
 
-
-            //[1] SHDocVw 의 브라우저에서 현재부라우져들 검출 
-            foreach (SHDocVw.WebBrowser wb in new ShellWindowsClass())
-            {
-                //[2] 각각의 브라우져 핸들과 현제Top의 핸들 검출
-                if (wb.HWND.Equals(handle))
-                {
-                    //[3] 검출된 브라우져의 타입캐스팅
-                    InternetExplorer ie = wb as InternetExplorer;
-                    string _name = ie.Name;
-                    string _resultURL = ie.LocationURL;
-                    Console.WriteLine(_name + " " + _resultURL);
-                }
-            }
-        }
-        
-        #region BackgroundWorker event define
         void bw_DoWork(List<string> splitMacroList, int macroListLength, DoWorkEventArgs e)
         {
+            rk =
+          Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Internet Settings\5.0\User Agent", true);
+            if (radioButton2.Checked == true)
+            {
+                rk.SetValue(null, "Mozilla/5.0(Linux; U; Android 7.0.0; SGH-i907) AppleWebKit / 533.1(KHTML, like Gecko) Version / 4.0 Mobile Safari/ 533.1 Chrome/87.0.3131.15");
+                if (rk != null)
+                {
+                    log.Debug("레지스트리 수정 완료");
+                    
+                 };
+            }
+            else
+                rk.SetValue(null, "");
             while (true)
             {
                 totalsw = setTotalSw();
                 totalsw.Start();
+                //beforenavigate
+                Thread aa = new Thread(() =>
+                {
+                    while (true)
+                    {
 
+                        ActivateAndClickOkButton();
+
+                        Thread.Sleep(2000);
+                    }
+                });
+                aa.IsBackground = true;
+                aa.Start();
                 log.Debug("\n\n\n매크로 작업목록 출력");
                 foreach (string temp in splitMacroList)
                 {
@@ -827,9 +917,9 @@ namespace marketingSolutionProgram
                         return;
                     }
 
-                    //ie.NewWindow2
+
                     macroString = splitMacroList[i].Trim().Substring(1); //특수문자 제거
-                    printCurrentMacro(macroString); //현재 명령을 라벨에 출력
+                    printCurrentMacro(macroString, i); //현재 명령을 라벨에 출력
 
                     indexNum = macroString[0] - '0';
                     indexString = macroString.Substring(macroString.IndexOf(".") + 1, macroString.IndexOf("=") - (macroString.IndexOf(".") + 1));
@@ -852,27 +942,17 @@ namespace marketingSolutionProgram
                                 case 1:
                                     //url 접속 또는 이동
                                     string url = checkUrl(macroString.Substring(macroString.IndexOf("=") + 1));
-                                    if (ie == null)
-                                    {
-                                        ie = new InternetExplorer();
-                                        webBrowser = (SHDocVw.WebBrowser)ie;
-                                        webBrowser.Visible = true;
-                                    }
-                                    ie.Navigate(url);
-                                    ie.Wait();
-                                    getWin();
+                                    makeIeProcess(url);
                                     break;
                                 case 2:
                                     //검색 기록 삭제
                                     clearHistory();
                                     break;
                                 case 3:
-                                    //
-                                    
+                                    //검색
                                     string search = macroString.Substring(macroString.IndexOf("=") + 1);
                                     searchStart(search);
-                                    Thread.Sleep(2000);
-                                    Console.WriteLine(ie.LocationURL);
+                                    ckIE();
                                     break;
                                 case 4:
                                     //게시글 or 버튼클릭
@@ -880,26 +960,81 @@ namespace marketingSolutionProgram
                                     //키워드검색=뉴스$블로그$부동산
                                     string keyword = macroString.Substring(macroString.IndexOf("=") + 1).Trim();
                                     string[] keywordNum = keyword.Split(new char[] { '$' });
-                                    bool result = false;
                                     int keywordLength = keywordNum.Length;
-                                   
+
                                     int randomIndex = getRandomIndex(keywordLength);
-                                    Console.WriteLine(randomIndex);
                                     string selectedKeyword = keywordNum[randomIndex];
 
                                     if (indexString.StartsWith("키워드"))
                                     {
-                                        findByKeyword(selectedKeyword);
+                                        workerThread = new Thread(() =>
+                                        {
+                                            try
+                                            {
+
+                                                findByKeyword(selectedKeyword);
+                                                Thread.Sleep(3000);
+
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                log.Debug(ex);
+                                            }
+                                        });
                                     }
                                     else
                                     {
-                                        findByHref(selectedKeyword);
+                                        workerThread = new Thread(() =>
+                                        {
+                                            try
+                                            {
+
+                                                findByHref(selectedKeyword);
+                                                Thread.Sleep(3000);
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                log.Debug(ex);
+                                            }
+
+                                        });
                                     }
-                                    getWin();
+                                    workerThread.SetApartmentState(ApartmentState.STA);
+                                    workerThread.Start();
+                                    workerThread.Join();
+
+                                    ckIE();
                                     break;
                                 case 5:
                                     //랜덤검색
-                                    clickRandomly();
+
+                                    workerThread = new Thread(() =>
+                                    {
+
+                                        try
+                                        {
+
+                                            Console.WriteLine("clickRandomly start");
+
+                                            clickRandomly();
+                                            // clickRandomlyExceptOnclick();
+                                            Console.WriteLine("clickRandomly complete");
+                                            Thread.Sleep(3000);
+                                            Console.WriteLine("thread complete");
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            log.Debug(ex);
+                                        }
+
+                                    });
+                                    workerThread.SetApartmentState(ApartmentState.STA);
+                                    workerThread.Start();
+                                    workerThread.Join();
+                                    Console.WriteLine("workerThread end");
+                                    //  ActivateAndClickOkButton();
+
+                                    ckIE();
                                     break;
                                 case 6:
                                     //체류시간추가=30~50
@@ -940,10 +1075,11 @@ namespace marketingSolutionProgram
                         catch (Exception ex)
                         {
                             Console.WriteLine(ex);
+                            log.Debug(ex);
                         }
                         finally
                         {
-                            endCurrentMacro(macroString);
+                            endCurrentMacro(macroString, i);
                         }
                     }
                     else
@@ -956,7 +1092,9 @@ namespace marketingSolutionProgram
 
                 }
                 splitInfiniteLoop(); // while문 반복마다 한번씩 실행됨 
-
+                deleteAllIeProcesses();
+                ie = null;
+  
                 totalsw.Stop();
 
             }
@@ -976,21 +1114,19 @@ namespace marketingSolutionProgram
             currentMacroLabel.Text = "현재 진행 명령 : 작업이 중단되었습니다.";
 
             processStartButton.Enabled = true;
-            //if (e.Cancelled)
-            //{
-            //    reportTextbox.Text += "작업을 중단했습니다." + Environment.NewLine;
-            //    worker = null;
-            //    if(driver != null) {
-            //        driver.Quit();
-            //    driver = null;
-            //    }
-            //}
+
             if (e.Error != null)
             {
                 reportTextBox.Text += "에러가 발생해서 작업이 중단되었습니다." + Environment.NewLine;
             }
             reportTextBox.Text += "작업을 중단했습니다." + Environment.NewLine;
             worker = null;
+            deleteAllIeProcesses();
+            
+            ie = null;
+            if(rk!=null) 
+            rk.SetValue(null, "");
+
             //예외처리 필요?
 
 
@@ -1026,10 +1162,11 @@ namespace marketingSolutionProgram
         #endregion
 
         #region 검색어 입력
+
         private void searchStart(string search)
         {
             //mobile버전 / pc버전
-            string prefixUrl = ie.LocationURL.Substring(8) ;
+            string prefixUrl = ie.LocationURL.Substring(8);
             //수정해야함
             Console.WriteLine("prefixUrl : " + prefixUrl);
             string[] splitUrl = prefixUrl.Split(new char[] { '.' });
@@ -1039,6 +1176,7 @@ namespace marketingSolutionProgram
                 string website = splitUrl[1];
                 if (website.StartsWith("naver"))
                 {
+                    Console.WriteLine("mobileNaverSearch");
                     mobileNaverSearchbarStart(search);
                 }
                 else
@@ -1076,16 +1214,78 @@ namespace marketingSolutionProgram
             //searchButton.click();
 
         }
+
+        public static void KeyDown(int keycode)
+        {
+
+            keybd_event((byte)Keys.HanguelMode, 0, 0, 0);
+
+            keybd_event((byte)keycode, 0, (int)KeyFlag.KE_DOWN, 0);
+
+        }
+        public static void KeyDown2(int keycode)
+        {
+            keybd_event((byte)keycode, 0, (int)KeyFlag.KE_DOWN, 0);
+
+        }
+
         private void mobileNaverSearchbarStart(string search)
         {
             //mshtml.HTMLDocument doc = ie.Document;
 
             mshtml.HTMLDocument doc = (mshtml.HTMLDocument)ie.Document;
+
             try
             {
                 var fakeSearchBar = doc.getElementById("MM_SEARCH_FAKE") as mshtml.IHTMLElement2;
+                IHTMLElementCollection forms = null;
+                if (fakeSearchBar == null)
+                {
+                    fakeSearchBar = doc.getElementById("sch_w") as mshtml.IHTMLElement2;
+                    forms = fakeSearchBar.getElementsByTagName("form");
+                    Console.WriteLine(forms.length);
 
-                fakeSearchBar.focus();
+                }
+                if (fakeSearchBar != null)
+                    fakeSearchBar.focus();
+                else
+                    forms.item(0).focus();
+
+                IntPtr iePtr = (IntPtr)ie.HWND;
+                SetFocus(iePtr);
+                //ShowWindowAsync(iePtr, SW_SHOWMAXIMIZED);
+
+                // 윈도우에 포커스를 줘서 최상위로 만든다
+                SetForegroundWindow(iePtr);
+
+                // KeyDown((int)Keys.A);
+                // KeyDown2((int)Keys.K);
+                //// KeyDown((int)Keys.S);
+
+                //StringBuilder st = new StringBuilder("여수누수");
+                //SendMessage(iePtr, WM_SETTEXT, IntPtr.Zero, st);
+                //Thread.Sleep(3000);
+                //Thread.Sleep(3000);
+                ////Process ieProcess = System.Diagnostics.Process.GetProcessById(ie.HWND);
+                //SetForegroundWindow((IntPtr)ie.HWND);
+
+                ////SendMessage(textBox1.Handle, WM_GETTEXTLENGTH, IntPtr.Zero, IntPtr.Zero);
+
+                //// 260 바이트 만큼 메모리 공간을 할당한다.
+                //IntPtr textPtr = Marshal.AllocHGlobal(260);
+
+                //// 텍스트박스1 의 텍스트를 textPtr 에 저장한다.
+                ////SendMessage(textBox1.Handle, WM_GETTEXT, new IntPtr(260), textPtr);
+
+                //// 포인터를 유니코드 문자열로 변환한다. 
+                //String text1 = Marshal.PtrToStringUni(textPtr, 260);
+                //int ieHandle = ie.HWND;
+
+                //// 텍스트박스2 에 텍스트박스1 의 텍스트를 입력한다
+                //SendMessage((IntPtr)ie.HWND, WM_SETTEXT, IntPtr.Zero, "여수누수");
+
+                //// 사용이 끝난 포인터는 메모리에서 해제해준다.
+                //Marshal.FreeHGlobal(textPtr);
 
                 IHTMLElement realSearchBar = doc.getElementById("query");
                 realSearchBar.setAttribute("value", search);
@@ -1161,7 +1361,7 @@ namespace marketingSolutionProgram
                     String buttonClass = button.className;
                     if (buttonClass != null && searchButton.Attributes["class"].Value.CompareTo(button.className) == 0)
                     {
-                        Console.WriteLine("class correct");
+
                         button.click();
                         return;
                     }
@@ -1175,10 +1375,43 @@ namespace marketingSolutionProgram
 
         #endregion
 
+        Microsoft.Win32.RegistryKey rk = null;
+        //ie 프로세스 생성
+        private void makeIeProcess(string url)
+        {
+            /*
+             * have to check resolution
+             * basic resolution : 800 x 600 
+             * */
+            url = checkUrl(macroString.Substring(macroString.IndexOf("=") + 1));
+            if (ie == null)
+            {
+                ie = new InternetExplorer();
+                webBrowser = (SHDocVw.WebBrowser)ie;
+                webBrowser.Visible = true;
+                ie.Left = 0;
+                ie.Top = 0;
+                ie.Height = int.Parse(browserXSizeTextbox.Text);
+                ie.Width = int.Parse(browserYSizeTextbox.Text);
+              
+                }
+            //User-Agent: Mozilla / 5.0(Linux; U; Android 2.2) AppleWebKit / 533.1(KHTML, like Gecko) Version / 4.0 Mobile Safari/ 533.1"
+          //  "User-Agent: Mozilla/7.0(Linux; Android 7.0.0; SGH-i907) AppleWebKit/664.76 (KHTML, like Gecko) Chrome/87.0.3131.15 Mobile Safari/664.76 (Windows NT 10.0; WOW64; Trident/7.0; Touch; .NET4.0C; .NET4.0E; .NET CLR 2.0.50727; .NET CLR 3.0.30729; .NET CLR 3.5.30729; Tablet PC 2.0; rv:11.0) like Gecko"
+
+            log.Debug("navigate2 start");
+            ie.Navigate2(url, null, null, null, null);
+
+            log.Debug("navigate2 complete");
+            ie.Wait();
+            log.Debug("wait complete");
+
+        }
+
         private void processStopButton_Click(object sender, EventArgs e)
         {
             currentMacroLabel.Text = "현재 진행 명령 : 작업을 중단 중입니다. 현재 명령까지 실행함.";
             worker.CancelAsync();
+
         }
 
         private void processStartButton_Click(object sender, EventArgs e)
@@ -1197,71 +1430,181 @@ namespace marketingSolutionProgram
             //{ MessageBox.Show("첫 작업으로 이동명령을 추가해야합니다."); return; }
             //else
             //{
-                log.Debug("\n\n\n");
-                processStartButton.Enabled = false;
-                progressBar1.Style = ProgressBarStyle.Marquee;
-                progressBar1.MarqueeAnimationSpeed = 50;
-                worker = new BackgroundWorker();
-                worker.DoWork += (obj, ev) => bw_DoWork(splitMacroList, macroListLength, ev);
-                worker.WorkerSupportsCancellation = true;
-                worker.RunWorkerCompleted += bw_RunWorkerCompleted;
-                worker.RunWorkerAsync();
+            log.Debug("\n\n\n");
+            processStartButton.Enabled = false;
+            progressBar1.Style = ProgressBarStyle.Marquee;
+            progressBar1.MarqueeAnimationSpeed = 50;
+            worker = new BackgroundWorker();
+            worker.DoWork += (obj, ev) => bw_DoWork(splitMacroList, macroListLength, ev);
+            worker.WorkerSupportsCancellation = true;
+            worker.RunWorkerCompleted += bw_RunWorkerCompleted;
+            worker.RunWorkerAsync();
             //}
         }
 
-        private void urlClearButton_Click(object sender, EventArgs e)
+        private void ckIE()
         {
-            inputUrlTextbox.Clear();
+            Console.WriteLine("ckIE 시작");
+            log.Debug("ckIE Start");
+            SHDocVw.ShellWindows shellWindows = new SHDocVw.ShellWindows();
+            int length = shellWindows.Count;
+            object len = (object)(length - 1);
+
+            ie = (InternetExplorer)shellWindows.Item(len);
+            webBrowser = (SHDocVw.WebBrowser)ie;
+            ie.Wait();
+            Console.WriteLine("ckIE 끝");
+            log.Debug("ckIE End");
+        }
+
+        //탭 삭제 기능
+        private void deleteTab()
+        {
+            SHDocVw.ShellWindows shellWindows = new SHDocVw.ShellWindows();
+
+            foreach (InternetExplorer iea in shellWindows)
+            {
+                if (iea.LocationURL.CompareTo(ie.LocationURL) != 0)
+                {
+                    iea.Quit();
+                }
+            }
+
         }
 
         private void button1_Click_1(object sender, EventArgs e)
         {
-            clearHistory();
-        }
-    }
 
-    /*
-     *  // 특정 URL을 갖는 IE 찾기
-    WebBrowser wb = FindIE("https://www.google.com");
-
-    // URL을 다른 것으로 변경
-    if (wb != null)
-    {
-       wb.Navigate("www.bing.com");
-    }
-}        
-
-static SHDocVw.WebBrowser FindIE(string url)
-{
-    Uri uri = new Uri(url);
-    var shellWindows = new SHDocVw.ShellWindows();
-    foreach (SHDocVw.WebBrowser wb in shellWindows)
-    {
-        //File Explorer인 경우 LocationURL가 비어있음. 제외.
-        if (!string.IsNullOrEmpty(wb.LocationURL))
-        {
-            Uri wbUri = new Uri(wb.LocationURL);
-            Debug.WriteLine(wbUri);
-            if (wbUri.Equals(uri))
+            if (ie == null)
             {
-                return wb;
+                ie = new InternetExplorer();
+                webBrowser = (SHDocVw.WebBrowser)ie;
+                webBrowser.Visible = true;
             }
+
+            ie.Navigate("https://m.sports.naver.com/news.nhn?oid=477&aid=0000232998");
+            ie.Wait();
+            findByKeyword("좋아요 평가하기");
+            findByKeyword("좋아요 평가하기");
+
+
+            // Thread workerThread = new Thread(() =>
+            //{
+
+
+            //    if (ie == null)
+            //    {
+            //        ie = new InternetExplorer();
+            //        webBrowser = (SHDocVw.WebBrowser)ie;
+            //        webBrowser.Visible = true;
+            //    }
+
+            //    ie.Left = 0;
+            //    ie.Top = 0;
+            //    ie.Height = 800;
+            //    ie.Width = 1000;
+            //    ie.BeforeNavigate2 += explorer_BeforeNavigate2;
+            //    //webBrowser = (SHDocVw.WebBrowser)ie;
+            //    //backgroundthread로 실행
+            //    ie.Navigate2("https://bns.plaync.com/update/history/2019/191204_complete?utm_source=naver&utm_medium=timeboard&utm_campaign=pre_cre2&utm_content=bs_naver_pc_timeboard_pre_cre2_200215_20t#main1");
+            //    ie.Wait();
+
+            //    clickRandomly();
+            //    clickRandomly();
+
+            //    // ie.DocumentComplete += webComplete;
+            //    try
+            //    {
+
+            //        //clearHistory();
+            //        //printCurrentMacro("navigate2");
+
+            //        Thread.Sleep(5000);
+            //        //SendMessage(textBox1.Handle, WM_GETTEXTLENGTH, IntPtr.Zero, IntPtr.Zero);
+
+            //        // 260 바이트 만큼 메모리 공간을 할당한다.
+            //        IntPtr textPtr = Marshal.AllocHGlobal(260);
+
+            //        // 텍스트박스1 의 텍스트를 textPtr 에 저장한다.
+            //        //SendMessage(textBox1.Handle, WM_GETTEXT, new IntPtr(260), textPtr);
+
+            //        // 포인터를 유니코드 문자열로 변환한다. 
+            //        String text1 = Marshal.PtrToStringUni(textPtr, 260);
+
+            //        //int ieHandle = ie.HWND;
+            //        //// 텍스트박스2 에 텍스트박스1 의 텍스트를 입력한다.
+            //        ////SendMessage((IntPtr)ieHandle, WM_SETTEXT, IntPtr.Zero, textPtr);
+
+            //        //// 사용이 끝난 포인터는 메모리에서 해제해준다.
+            //        //Marshal.FreeHGlobal(textPtr);
+
+            //        //Console.WriteLine(ie.HWND);
+            //        //Console.WriteLine(webBrowser.LocationURL);
+            //        //ie.Navigate2("https://www.daum.net");
+            //        //ie.Wait();
+            //        //Console.WriteLine(webBrowser.LocationURL);
+            //        //Console.WriteLine(webBrowser.Document);
+
+            //        // ckIE();
+            //        //printCurrentMacro("뉴스판");
+
+            //        //   findByKeyword("연예판");
+            //        ie.Wait();
+            //        //ckIE();
+            //        // findByKeyword("베스트");
+            //        ie.Wait();
+
+
+            //        deleteTab();
+            //        //findByHref("https://news.naver.com/");
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        Console.WriteLine(ex);
+            //    }
+
+            //});
+            // workerThread.SetApartmentState(ApartmentState.STA);
+            // workerThread.Start();
+
+
+
+        }
+      
+        private void Form1_Load(object sender, EventArgs e)
+        {
+            searchMethodSelectCombobox.SelectedIndex = 0;
+
+        }
+
+        //해상도 적용 버튼 이벤트
+        private void browserSizeButton_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("해상도 적용 완료 : " + browserXSizeTextbox.Text + " X " + browserYSizeTextbox.Text);
+        }
+
+
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+          if(rk !=null)
+            rk.SetValue(null, "");
         }
     }
-    return null;
-}
-     * */
+
     #region 로딩 완료 확장 메서드
     // 페이지 로딩 완료까지 대기하는 확장 메서드
     public static class SHDovVwEx
     {
         public static void Wait(this SHDocVw.InternetExplorer ie, int millisecond = 0)
         {
+            int count = 0;
             while (ie.Busy == true || ie.ReadyState != SHDocVw.tagREADYSTATE.READYSTATE_COMPLETE)
             {
                 System.Threading.Thread.Sleep(100);
+                count++;
+                if (count == 300) return;
             }
-            System.Threading.Thread.Sleep(millisecond);
+
         }
     }
     #endregion

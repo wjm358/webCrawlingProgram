@@ -117,4 +117,16 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="textBox1.Text" xml:space="preserve">
+    <value>2020-02-20
+
+1. 검색기능 사용할때는 홈페이지의 메인으로 이동하는 작업 명령을 추가하고 나서 검색어 입력 매크로를 추가해야함
+ex ) m.naver.com으로 이동하는 매크로를 추가한 후에 여수누수를 검색하는 매크로를 추가
+
+2. 접속방식 선택할때는 작업매크로에 추가안하고 버튼만 클릭하면 적용됨 (Default로 Mobile버전으로 선택되어 있음)
+
+3. Daum에서 키워드 검색이 작동하지 않던 에러 수정
+
+4. 로그파일은 C:\wonjjong 폴더에 저장</value>
+  </data>
 </root>

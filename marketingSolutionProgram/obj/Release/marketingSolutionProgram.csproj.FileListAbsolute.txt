@@ -1,0 +1,17 @@
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Release\marketingSolutionProgram.exe.config
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Release\marketingSolutionProgram.exe
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Release\marketingSolutionProgram.pdb
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Release\HtmlAgilityPack.dll
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Release\log4net.dll
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Release\HtmlAgilityPack.pdb
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Release\HtmlAgilityPack.xml
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\bin\Release\log4net.xml
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Release\Interop.SHDocVw.dll
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Release\marketingSolutionProgram.csproj.ResolveComReference.cache
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Release\marketingSolutionProgram.Form1.resources
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Release\marketingSolutionProgram.Properties.Resources.resources
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Release\marketingSolutionProgram.csproj.GenerateResource.cache
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Release\marketingSolutionProgram.csproj.CoreCompileInputs.cache
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Release\marketingSolutionProgram.csproj.CopyComplete
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Release\marketingSolutionProgram.exe
+C:\Users\wjm35\source\repos\marketingSolutionProgram\marketingSolutionProgram\obj\Release\marketingSolutionProgram.pdb
