@@ -5,7 +5,7 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{BE15767B-6735-42AE-ABEB-FFED02EA183F}</ProjectGuid>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <RootNamespace>marketingSolutionProgram</RootNamespace>
     <AssemblyName>marketingSolutionProgram</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
@@ -59,6 +59,18 @@
     </Compile>
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Form1_BackgroundWorker.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Form1_instagram.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Form1_KeyboardHooking.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Form1_mouseLocationDetect.cs">
+      <SubType>Form</SubType>
     </Compile>
     <Compile Include="Form1_searchBarMethod.cs">
       <SubType>Form</SubType>

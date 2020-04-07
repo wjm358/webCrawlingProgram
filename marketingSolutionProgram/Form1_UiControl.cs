@@ -48,6 +48,8 @@ namespace marketingSolutionProgram
             progressBar1.Style = ProgressBarStyle.Marquee;
             progressBar1.MarqueeAnimationSpeed = 50;
 
+            label11.Text = "총 명령어 개수 : \n";
+            label11.Text += macroListLength;
             worker = new BackgroundWorker();
             worker.DoWork += (obj, ev) => bw_DoWork(splitMacroList, macroListLength, ev);
             worker.WorkerSupportsCancellation = true;
@@ -113,7 +115,7 @@ namespace marketingSolutionProgram
         {
             if (currentMacroLabel.InvokeRequired)
             {
-                currentMacroLabel.BeginInvoke(new Action(() => { currentMacroLabel.Text = num + " , " + "현재 진행 명령 : " + macroString; }));
+                currentMacroLabel.BeginInvoke(new Action(() => { currentMacroLabel.Text = (num+1) + " , " + "현재 진행 명령 : " + macroString; }));
                 return;
             }
         }
@@ -125,7 +127,7 @@ namespace marketingSolutionProgram
             {
                 reportTextBox.BeginInvoke(new Action(() =>
                 {
-                    reportTextBox.Text += num + " , " + "작업완료 : " + macroString.Substring(macroString.IndexOf(".") + 1) + "\r\n";
+                    reportTextBox.Text += (num+1) + " , " + "작업완료 : " + macroString.Substring(macroString.IndexOf(".") + 1) + "\r\n";
 
                     reportTextBox.SelectionStart = reportTextBox.TextLength;
                     reportTextBox.ScrollToCaret();
